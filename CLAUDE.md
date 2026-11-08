@@ -70,8 +70,9 @@ Gunakan `GENERATED ALWAYS AS IDENTITY`, `TIMESTAMPTZ`, `BOOLEAN`, dan
 2. M2: loop agen di CLI + 4 tool + PostgreSQL  -- selesai
 3. M3: planner + tes penempatan + level  -- selesai
 4. M4: FastAPI + halaman web mode teks  -- selesai
-5. M5: voice (Web Speech API)  <- posisi sekarang
-6. M6: deploy ke VPS (PostgreSQL hanya listen di localhost) + uji coba teman sekelas
+5. M5: voice (Web Speech API)  -- selesai
+6. M6: deploy ke VPS (PostgreSQL hanya listen di localhost) + uji coba teman sekelas  <- posisi sekarang
+   Wajib HTTPS: input suara (SpeechRecognition) hanya jalan di localhost atau HTTPS.
 
 Output portofolio: repo GitHub publik, README (diagram arsitektur, loop agen,
 4 tool, prompt caching), video demo 1-2 menit.

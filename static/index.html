@@ -59,6 +59,13 @@
   #composer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg); border-top: 1px solid var(--line); }
   #composer .inner { max-width: 720px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 8px; }
   #composer textarea { resize: none; height: 48px; }
+  /* ---------- Suara (M5) ---------- */
+  #composer button.icon { padding: 10px 12px; }
+  #btn-mic.listening { background: var(--bad); color: #fff; border-color: var(--bad); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: .55; } }
+  .voice-note { max-width: 720px; margin: 0 auto; padding: 8px 16px 0; font-size: .85rem; color: var(--muted); min-height: 1.4em; }
+  .bubble .replay { display: block; margin-top: 6px; padding: 2px 8px; font-size: .8rem; font-weight: 500;
+                    background: transparent; color: var(--muted); border: 1px solid var(--line); }
   table { width: 100%; border-collapse: collapse; font-size: .92rem; }
   th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
 </style>
@@ -118,9 +125,12 @@
 </main>
 
 <div id="composer" class="hidden">
+  <div id="voice-status" class="voice-note"></div>
   <div class="inner">
-    <textarea id="input" placeholder="Tulis dalam bahasa Inggris... (Enter = kirim, Shift+Enter = baris baru)"></textarea>
+    <button id="btn-mic" class="secondary icon" title="Bicara dalam bahasa Inggris">🎤</button>
+    <textarea id="input" placeholder="Tulis atau tekan 🎤 untuk bicara... (Enter = kirim)"></textarea>
     <button id="btn-send">Kirim</button>
+    <button id="btn-tts" class="secondary icon" title="Suara tutor: nyala/mati">🔊</button>
     <button id="btn-end" class="secondary" title="Akhiri sesi dan lihat rekap">Selesai</button>
   </div>
 </div>
@@ -271,6 +281,7 @@ $("btn-to-home").addEventListener("click", () => showHome());
 // Layar 3: Beranda
 // =====================================================================
 async function showHome() {
+  stopSpeaking();
   state.user = await api("/api/login", { username: state.user.username });  // segarkan jumlah sesi hari ini
   const u = state.user;
   $("home-greeting").textContent = `Halo, ${u.username}!`;
@@ -283,13 +294,146 @@ async function showHome() {
 $("btn-logout").addEventListener("click", () => { state.user = null; remember(null); $("username").value = ""; show("login"); });
 
 // =====================================================================
+// Suara (M5): Web Speech API bawaan browser. Server tidak berubah sama sekali.
+// =====================================================================
+
+// ---- Speech-to-Text: suara pengguna -> teks di kotak input ----
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;  // Chrome/Edge pakai awalan webkit
+let recognizer = null, listening = false, micError = false;
+
+const MIC_ERRORS = {
+  "not-allowed": "Akses mikrofon ditolak. Klik ikon di kiri address bar, lalu izinkan mikrofon.",
+  "no-speech": "Tidak terdengar suara. Tekan 🎤 dan coba lagi.",
+  "audio-capture": "Mikrofon tidak ditemukan.",
+  "network": "Input suara butuh koneksi internet (Chrome memproses suara di server Google).",
+};
+
+function voiceStatus(text) { $("voice-status").textContent = text; }
+
+function setupMic() {
+  if (!Recognition) {
+    $("btn-mic").classList.add("hidden");
+    voiceStatus("Browser ini belum mendukung input suara. Gunakan Chrome atau Edge.");
+    return;
+  }
+  recognizer = new Recognition();
+  recognizer.lang = "en-US";          // yang dilatih adalah bahasa Inggris
+  recognizer.interimResults = true;   // teks muncul bertahap selagi pengguna bicara
+  recognizer.continuous = false;      // berhenti otomatis saat pengguna jeda
+  let before = "";                    // teks yang sudah ada di kotak input sebelum bicara
+
+  recognizer.onstart = () => {
+    listening = true; micError = false;
+    before = $("input").value.trim() ? $("input").value.trimEnd() + " " : "";
+    $("btn-mic").classList.add("listening");
+    voiceStatus("Mendengarkan... bicara dalam bahasa Inggris. Tekan 🎤 lagi untuk berhenti.");
+  };
+  recognizer.onresult = (e) => {
+    let heard = "";
+    for (const result of e.results) heard += result[0].transcript;  // [0] = tebakan terbaik
+    $("input").value = before + heard;
+  };
+  recognizer.onerror = (e) => {
+    if (e.error === "aborted") return;
+    micError = true;
+    voiceStatus(MIC_ERRORS[e.error] || `Input suara gagal (${e.error}).`);
+  };
+  recognizer.onend = () => {
+    listening = false;
+    $("btn-mic").classList.remove("listening");
+    if (!micError) voiceStatus($("input").value.trim() ? "Periksa transkrip di atas, perbaiki jika perlu, lalu tekan Kirim." : "");
+  };
+}
+
+$("btn-mic").addEventListener("click", () => {
+  if (!recognizer || state.busy) return;
+  if (listening) { recognizer.stop(); return; }
+  stopSpeaking();        // jangan sampai suara tutor ikut terekam
+  recognizer.start();
+});
+
+// ---- Text-to-Speech: balasan tutor dibacakan ----
+const canSpeak = "speechSynthesis" in window;
+let ttsOn = (() => { try { return localStorage.getItem("tts") !== "off"; } catch { return true; } })();
+let voices = [];
+
+// Kata umum bahasa Indonesia untuk menebak bahasa tiap kalimat (balasan pemula bercampur dua bahasa)
+const ID_WORDS = new Set(("yang dan ini itu kamu kau aku saya tidak bukan dengan untuk ya sudah belum coba kita " +
+  "pakai harus jangan lagi juga ada kalau karena atau tapi tetapi bisa sekarang dulu nah oke bagus benar salah " +
+  "kalimat jadi supaya agar sama seperti dari pada akan masih sangat lebih giliranmu ingat artinya contoh " +
+  "contohnya jawab jawaban perhatikan sesi kesalahan selamat sampai jumpa tulis ulangi lanjut mau apa").split(" "));
+
+function guessLang(sentence) {
+  const words = sentence.toLowerCase().match(/[a-z']+/g) || [];
+  const indo = words.filter((w) => ID_WORDS.has(w)).length;
+  return indo >= Math.max(1, words.length * 0.15) ? "id-ID" : "en-US";
+}
+
+function toSentences(markdownText) {
+  const plain = markdownText
+    .replace(/\p{Extended_Pictographic}|️/gu, "")    // emoji tidak dibacakan
+    .replace(/[*_`#]/g, "")                                // simbol markdown
+    .replace(/^\s*(>|[-*]|\d+[.)])\s+/gm, "")              // penanda kutipan dan daftar
+    .replace(/\s*(→|->)\s*/g, ", ");                      // panah koreksi jadi jeda
+  // Pecah di akhir kalimat dan setelah titik dua ("Coba jawab: Where are you from?" -> 2 bagian, 2 bahasa)
+  return plain.split(/(?<=[.!?:])\s+|\n+/).map((s) => s.trim()).filter((s) => /[a-z0-9]/i.test(s));
+}
+
+function voiceFor(lang) {
+  return voices.find((v) => v.lang.replace("_", "-") === lang) || voices.find((v) => v.lang.startsWith(lang.slice(0, 2)));
+}
+
+function stopSpeaking() { if (canSpeak) speechSynthesis.cancel(); }
+
+function speak(text) {
+  if (!canSpeak) return;
+  stopSpeaking();
+  // Dibacakan per kalimat: bahasa bisa berganti, dan Chrome kadang memotong ucapan yang terlalu panjang
+  for (const sentence of toSentences(text)) {
+    const u = new SpeechSynthesisUtterance(sentence);
+    u.lang = guessLang(sentence);
+    const voice = voiceFor(u.lang);
+    if (voice) u.voice = voice;
+    u.rate = u.lang === "en-US" ? 0.95 : 1;   // bahasa Inggris sedikit diperlambat agar mudah ditangkap
+    speechSynthesis.speak(u);
+  }
+}
+
+function renderTtsButton() {
+  $("btn-tts").textContent = ttsOn ? "🔊" : "🔇";
+  $("btn-tts").title = ttsOn ? "Suara tutor: nyala (klik untuk mematikan)" : "Suara tutor: mati (klik untuk menyalakan)";
+}
+
+$("btn-tts").addEventListener("click", () => {
+  ttsOn = !ttsOn;
+  try { localStorage.setItem("tts", ttsOn ? "on" : "off"); } catch {}
+  if (!ttsOn) stopSpeaking();
+  renderTtsButton();
+});
+
+if (canSpeak) {
+  voices = speechSynthesis.getVoices();
+  speechSynthesis.onvoiceschanged = () => { voices = speechSynthesis.getVoices(); };  // Chrome memuat daftar suara belakangan
+} else {
+  $("btn-tts").classList.add("hidden");
+}
+
+// =====================================================================
 // Layar 4: Chat
 // =====================================================================
-function addBubble(role, text) {
+function addBubble(role, text, voice = true) {
   const div = document.createElement("div");
   div.className = `bubble ${role}`;
   if (role === "tutor") div.innerHTML = markdown(text);  // aman: markdown() meng-escape dulu
   else div.textContent = text;                           // teks pengguna tidak pernah jadi HTML
+  if (role === "tutor" && voice && canSpeak) {
+    const replay = document.createElement("button");
+    replay.className = "replay";
+    replay.textContent = "🔊 Putar ulang";
+    replay.addEventListener("click", () => speak(text));
+    div.appendChild(replay);
+    if (ttsOn) speak(text);
+  }
   $("messages").appendChild(div);
   div.scrollIntoView({ behavior: "smooth", block: "end" });
   return div;
@@ -346,13 +490,16 @@ async function send(path, body, userText) {
     if (r.selesai) showRecap(r);
   } catch (err) {
     setBusy(false);
-    addBubble("tutor", `⚠️ ${err.message}`);
+    addBubble("tutor", `⚠️ ${err.message}`, false);
   }
 }
 
 function sendMessage() {
   const text = $("input").value.trim();
   if (!text) return;
+  if (listening) recognizer.stop();
+  stopSpeaking();
+  voiceStatus("");
   $("input").value = "";
   send(`/api/sessions/${state.sessionId}/messages`, { user_id: state.user.id, text }, text);
 }
@@ -385,6 +532,8 @@ function showRecap(r) {
 // =====================================================================
 // Saat halaman dibuka: masuk otomatis jika username pernah disimpan
 // =====================================================================
+setupMic();
+renderTtsButton();
 const saved = remembered();
 if (saved) login(saved).catch(() => show("login")); else show("login");
 </script>
