@@ -1,7 +1,7 @@
 [project]
 name = "ai-english-tutor"
 version = "0.1.0"
-description = "Add your description here"
+description = "Tutor percakapan bahasa Inggris berbasis agen AI untuk mahasiswa Indonesia"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -13,3 +13,13 @@ dependencies = [
     "python-dotenv>=1.2.4",
     "uvicorn>=0.54.0",
 ]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

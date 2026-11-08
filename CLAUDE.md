@@ -22,6 +22,8 @@ Tujuan utama: portofolio belajar agentic AI (tool calling, memori, planner).
 - Frontend: satu halaman tanpa framework, dipisah jadi `static/index.html` (struktur), `static/style.css`
   (tampilan), `static/app.js` (perilaku); disajikan `app.py`. Voice via Web Speech API (STT + TTS browser)
 - Jalankan web: `uv run uvicorn app:app --reload`, CLI: `uv run main.py`
+- Tes: `uv run pytest` (LLM tiruan, tanpa biaya). Setelah mengubah prompt, WAJIB juga
+  `RUN_LIVE=1 uv run pytest tests/test_live.py`: perubahan prompt bisa diam-diam menghentikan tool calling.
 
 ## Desain produk
 - Hanya bahasa Inggris. Level: pemula (dari nol), menengah, lanjut.

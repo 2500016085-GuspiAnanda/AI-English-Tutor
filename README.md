@@ -173,6 +173,22 @@ uv run main.py --debug           # atau CLI, dengan log tool call dan token
 
 Input suara hanya berjalan di **Google Chrome** atau **Microsoft Edge**, dan hanya di `localhost` atau HTTPS.
 
+## Tes
+
+```bash
+uv run pytest                                  # 57 tes, ~3 detik, tanpa memanggil DeepSeek
+RUN_LIVE=1 uv run pytest tests/test_live.py    # tes perilaku model ke DeepSeek sungguhan (berbayar)
+```
+
+| Lapis | Isi |
+|---|---|
+| `test_unit.py` | Logika murni: penilaian tes, validasi argumen tool, mood, planner, susunan prompt |
+| `test_db.py` | Query SQL ke PostgreSQL: upsert progres pola, streak sampai "dikuasai", constraint, cascade |
+| `test_api.py` | Semua endpoint dan loop agen penuh dengan **LLM tiruan** berjawaban terskrip, sehingga alur tool call → DB → mood → koreksi diuji secara deterministik |
+| `test_live.py` | Perilaku DeepSeek sendiri: model tetap memanggil `save_mistake` di kedua gaya mentor. Menjaga regresi nyata saat sebuah instruksi prompt pernah membuat model berhenti mencatat kesalahan |
+
+Tes database dan API memakai `DATABASE_URL`; pengguna buatan tes berawalan `pytest_` dan dihapus otomatis.
+
 ## Struktur proyek
 
 ```
@@ -187,6 +203,7 @@ main.py          antarmuka CLI
 static/          halaman web tanpa framework: index.html, style.css, app.js
 schema.sql, seed.sql
 spike_m1.py      uji awal tool calling DeepSeek
+tests/           57 tes pytest (unit, database, API + loop agen dengan LLM tiruan) + tes live
 ```
 
 ## Keputusan desain dan batasan
