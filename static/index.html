@@ -307,7 +307,8 @@ const MIC_ERRORS = {
   "not-allowed": "Akses mikrofon ditolak. Klik ikon di kiri address bar, lalu izinkan mikrofon.",
   "no-speech": "Tidak terdengar suara. Tekan 🎤 dan coba lagi.",
   "audio-capture": "Mikrofon tidak ditemukan.",
-  "network": "Input suara butuh koneksi internet (Chrome memproses suara di server Google).",
+  "network": "Layanan pengenal suara tidak bisa dihubungi. Pakai Google Chrome atau Microsoft Edge asli " +
+             "(Brave, Opera, dan browser bawaan editor tidak didukung), dan pastikan internet/VPN tidak memblokir.",
 };
 
 function voiceStatus(text) { $("voice-status").textContent = text; }
