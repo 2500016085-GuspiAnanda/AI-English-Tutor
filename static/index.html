@@ -31,7 +31,7 @@
 
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
-  body { margin: 0; color: var(--ink); font: 400 var(--t1)/1.6 var(--f-ui);
+  body { margin: 0; min-height: 100vh; color: var(--ink); font: 400 var(--t1)/1.6 var(--f-ui);
          background: linear-gradient(180deg, var(--bg-tint) 0, var(--bg) 460px) no-repeat, var(--bg); }
   button, input, textarea { font: inherit; color: inherit; }
   :focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; border-radius: 6px; }
@@ -199,7 +199,7 @@
   #composer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 3; background: var(--surface);
               box-shadow: 0 -6px 20px rgba(15, 42, 61, .06); }
   #composer .inner { max-width: 820px; margin: 0 auto; padding: var(--s3) var(--s5); display: flex; gap: var(--s2); }
-  #composer textarea { resize: none; height: 50px; }
+  #composer textarea { resize: none; height: 50px; scrollbar-width: none; }
   #composer .live { max-width: 820px; margin: 0 auto; padding: var(--s2) var(--s5) 0; text-align: left; }
   @media (max-width: 560px) { #composer .inner, #composer .live { padding-left: var(--s4); padding-right: var(--s4); } }
   body.composer-open main { padding-bottom: 150px; }
@@ -219,6 +219,22 @@
   table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; margin-top: var(--s2); }
   th { text-align: left; font-size: var(--t-1); color: var(--muted); font-weight: 800; padding: var(--s2) var(--s1); border-bottom: 1.5px solid var(--line); }
   td { padding: var(--s3) var(--s1); border-bottom: 1px solid var(--line); }
+
+  /* ---------- HP ---------- */
+  @media (max-width: 560px) {
+    .hero { padding: var(--s6) 0 var(--s5); }
+    .hero .lede { font-size: var(--t1); }
+    #chat-info { gap: var(--s2); padding: var(--s2) 0; }
+    #chat-info-text { flex: 1 1 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* tombol header jadi ikon saja; teksnya tetap terbaca pembaca layar */
+    #chat-info button.sm span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    #stage { padding-top: var(--s3); gap: var(--s3); }
+    #face { width: 132px; }
+    #stage-reply { max-height: none; }          /* hindari scroll di dalam scroll */
+    #stage-marks { padding: var(--s3) var(--s4); }
+  }
+  /* layar sentuh tanpa keyboard fisik: petunjuk tombol Spasi tidak relevan */
+  @media (hover: none) and (pointer: coarse) { .kbd-hint { display: none; } }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -332,7 +348,7 @@
       <div id="stage-controls">
         <div id="live" class="live" aria-live="polite"></div>
         <button id="btn-ptt" aria-label="Tahan untuk bicara"></button>
-        <div class="hint">Tahan tombol atau <kbd>Spasi</kbd> sambil bicara. Lepas untuk mengirim.</div>
+        <div class="hint">Tahan tombol<span class="kbd-hint"> atau <kbd>Spasi</kbd></span> sambil bicara. Lepas untuk mengirim.</div>
         <form id="stage-form" class="row">
           <label class="sr-only" for="stage-input">Atau ketik jawabanmu</label>
           <input type="text" id="stage-input" placeholder="atau ketik di sini" autocomplete="off">
@@ -358,7 +374,7 @@
   <div class="inner">
     <button id="btn-ptt2" class="quiet" aria-label="Tahan untuk bicara"></button>
     <label class="sr-only" for="input">Jawabanmu dalam bahasa Inggris</label>
-    <textarea id="input" placeholder="Tulis dalam bahasa Inggris. Enter untuk kirim."></textarea>
+    <textarea id="input" placeholder="Tulis jawabanmu..."></textarea>
     <button id="btn-send">Kirim</button>
   </div>
 </div>
