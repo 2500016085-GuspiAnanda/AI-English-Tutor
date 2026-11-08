@@ -299,7 +299,9 @@ $("btn-logout").addEventListener("click", () => { state.user = null; remember(nu
 
 // ---- Speech-to-Text: suara pengguna -> teks di kotak input ----
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;  // Chrome/Edge pakai awalan webkit
-let recognizer = null, listening = false, micError = false;
+// wantListening = keinginan PENGGUNA (nyala sampai 🎤 ditekan lagi);
+// listening     = kondisi BROWSER saat ini (bisa berhenti sendiri walau pengguna belum selesai)
+let recognizer = null, wantListening = false, listening = false, micError = false;
 
 const MIC_ERRORS = {
   "not-allowed": "Akses mikrofon ditolak. Klik ikon di kiri address bar, lalu izinkan mikrofon.",
@@ -319,11 +321,12 @@ function setupMic() {
   recognizer = new Recognition();
   recognizer.lang = "en-US";          // yang dilatih adalah bahasa Inggris
   recognizer.interimResults = true;   // teks muncul bertahap selagi pengguna bicara
-  recognizer.continuous = false;      // berhenti otomatis saat pengguna jeda
+  recognizer.continuous = true;       // tetap mendengar walau pengguna jeda untuk berpikir
   let before = "";                    // teks yang sudah ada di kotak input sebelum bicara
 
   recognizer.onstart = () => {
     listening = true; micError = false;
+    if (!wantListening) { recognizer.stop(); return; }  // pengguna menekan berhenti saat mic sedang menyala ulang
     before = $("input").value.trim() ? $("input").value.trimEnd() + " " : "";
     $("btn-mic").classList.add("listening");
     voiceStatus("Mendengarkan... bicara dalam bahasa Inggris. Tekan 🎤 lagi untuk berhenti.");
@@ -335,11 +338,18 @@ function setupMic() {
   };
   recognizer.onerror = (e) => {
     if (e.error === "aborted") return;
-    micError = true;
+    micError = true;   // error = jangan dinyalakan ulang otomatis (cegah loop tanpa akhir)
     voiceStatus(MIC_ERRORS[e.error] || `Input suara gagal (${e.error}).`);
   };
   recognizer.onend = () => {
     listening = false;
+    // Chrome menghentikan mikrofon sendiri setelah beberapa saat walau mode continuous.
+    // Jika pengguna belum menekan 🎤 lagi, langsung nyalakan ulang; teks lama tetap tersimpan
+    // karena onstart mengambil isi kotak input sebagai awalan.
+    if (wantListening && !micError) {
+      try { recognizer.start(); return; } catch { /* gagal menyala ulang: anggap selesai */ }
+    }
+    wantListening = false;
     $("btn-mic").classList.remove("listening");
     if (!micError) voiceStatus($("input").value.trim() ? "Periksa transkrip di atas, perbaiki jika perlu, lalu tekan Kirim." : "");
   };
@@ -347,10 +357,16 @@ function setupMic() {
 
 $("btn-mic").addEventListener("click", () => {
   if (!recognizer || state.busy) return;
-  if (listening) { recognizer.stop(); return; }
+  if (wantListening) { stopMic(); return; }
+  wantListening = true;
   stopSpeaking();        // jangan sampai suara tutor ikut terekam
-  recognizer.start();
+  try { recognizer.start(); } catch { /* sudah dalam proses menyala */ }
 });
+
+function stopMic() {
+  wantListening = false;
+  if (listening) recognizer.stop();   // onend akan merapikan tombol dan status
+}
 
 // ---- Text-to-Speech: balasan tutor dibacakan ----
 const canSpeak = "speechSynthesis" in window;
@@ -497,7 +513,7 @@ async function send(path, body, userText) {
 function sendMessage() {
   const text = $("input").value.trim();
   if (!text) return;
-  if (listening) recognizer.stop();
+  if (wantListening) stopMic();
   stopSpeaking();
   voiceStatus("");
   $("input").value = "";
