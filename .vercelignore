@@ -1,0 +1,11 @@
+# Rahasia: JANGAN pernah diunggah. Di Vercel, nilai-nilai ini diisi lewat Environment Variables.
+.env
+.env.*
+!.env.example
+
+# Tidak dibutuhkan saat aplikasi berjalan di Vercel
+.venv/
+__pycache__/
+tests/
+docs/
+spike_m1.py

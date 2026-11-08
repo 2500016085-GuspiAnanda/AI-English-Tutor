@@ -5,6 +5,7 @@ import os
 import psycopg
 from dotenv import load_dotenv
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 
 load_dotenv()
@@ -18,11 +19,16 @@ def connect() -> psycopg.Connection:
 
 
 def make_pool() -> ConnectionPool:
-    """Kumpulan koneksi untuk web: tiap request meminjam satu koneksi lalu mengembalikannya."""
+    """Kumpulan koneksi untuk web: tiap request meminjam satu koneksi lalu mengembalikannya.
+
+    check: koneksi diuji sebelum dipinjamkan (database serverless seperti Neon bisa memutus koneksi diam).
+    max_idle: koneksi yang lama tidak dipakai ditutup lebih dulu oleh pool.
+    """
     return ConnectionPool(
         os.environ["DATABASE_URL"],
         kwargs={"autocommit": True, "row_factory": dict_row},
         min_size=1, max_size=5, open=False,
+        check=ConnectionPool.check_connection, max_idle=60,
     )
 
 
@@ -89,6 +95,36 @@ def create_session(conn, user_id: int, topic_id: int | None, skenario: str | Non
         (user_id, topic_id, skenario, fokus_pola),
     ).fetchone()
     return row["id"]
+
+
+def save_chat_state(conn, session_id: int, state: dict) -> None:
+    conn.execute("UPDATE sessions SET state = %s WHERE id = %s", (Jsonb(state), session_id))
+
+
+def load_chat_state(conn, session_id: int) -> dict | None:
+    """Kembalikan {"user_id", "state"} atau None bila sesi tidak ada."""
+    return conn.execute("SELECT user_id, state FROM sessions WHERE id = %s", (session_id,)).fetchone()
+
+
+def try_lock_session(conn, session_id: int, seconds: int = 180) -> bool:
+    """Kunci sesi selama pesan diproses. Gagal bila sedang dikunci request lain.
+
+    Kunci berbentuk batas waktu, bukan flag biasa: bila server mati di tengah proses,
+    kunci lepas sendiri setelah `seconds` detik sehingga sesi tidak macet selamanya.
+    """
+    row = conn.execute(
+        """
+        UPDATE sessions SET busy_until = now() + make_interval(secs => %s)
+        WHERE id = %s AND (busy_until IS NULL OR busy_until < now())
+        RETURNING id
+        """,
+        (seconds, session_id),
+    ).fetchone()
+    return row is not None
+
+
+def unlock_session(conn, session_id: int) -> None:
+    conn.execute("UPDATE sessions SET busy_until = NULL WHERE id = %s", (session_id,))
 
 
 def end_session(conn, session_id: int, ringkasan: str) -> None:

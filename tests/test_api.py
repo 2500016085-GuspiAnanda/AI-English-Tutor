@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import db
-from app import CHATS, app
+from app import app
 from tests.conftest import PREFIX, llm_text, llm_tools
 
 MISTAKE = {"kalimat_asli": "I go to campus yesterday", "kalimat_benar": "I went to campus yesterday",
@@ -71,6 +71,7 @@ def test_gaya_mentor(client, conn):
 
 def test_halaman_dan_file_statis_tersaji(client):
     for path, kind in [("/", "text/html"), ("/static/style.css", "text/css"), ("/static/app.js", "javascript")]:
+        # lokal disajikan FastAPI dari public/; di Vercel file yang sama disajikan CDN
         r = client.get(path)
         assert r.status_code == 200 and kind in r.headers["content-type"]
 
@@ -99,7 +100,8 @@ def test_sesi_penuh_salah_lalu_rekap(client, conn, fake_llm):
     fake_llm.queue += [llm_tools(("end_session", {"ringkasan": "1 kesalahan: simple past."})), llm_text("Bye!")]
     end = client.post(f"/api/sessions/{s['session_id']}/end", json={"user_id": uid}).json()
     assert end["selesai"] is True and end["ringkasan"] == "1 kesalahan: simple past."
-    assert s["session_id"] not in CHATS   # state sesi dibersihkan dari memori server
+    assert db.load_chat_state(conn, s["session_id"])["state"]["closed"] is True
+    assert say(client, uid, s["session_id"], "hi").status_code == 404   # sesi selesai tidak bisa dilanjutkan
 
     # Riwayat percakapan tersimpan di tabel messages
     roles = [m["role"] for m in conn.execute(
@@ -159,6 +161,40 @@ def test_planner_ngawur_tetap_bisa_mulai_sesi(client, conn, fake_llm):
     fake_llm.plan = "ini bukan JSON"
     s = start(client, uid, fake_llm)
     assert s["topik"] == "Perkenalan diri"   # rencana cadangan deterministik
+
+
+# --- Stateless: state di database, bukan di memori server ---------------------------------
+
+def test_state_sesi_tersimpan_di_database(client, conn, fake_llm):
+    uid = login(client, "api_state")
+    s = start(client, uid, fake_llm)
+    fake_llm.queue.append(llm_text("Nice."))
+    say(client, uid, s["session_id"], "My name is Budi.")
+    state = db.load_chat_state(conn, s["session_id"])["state"]
+    assert state["turn"] == 1 and state["closed"] is False
+    assert [m["role"] for m in state["messages"]][:2] == ["system", "user"]
+    # Riwayat dari DB benar-benar dikirim lagi ke LLM di giliran berikutnya
+    say(client, uid, s["session_id"], "I like football.")
+    assert any(m.get("content") == "My name is Budi." for m in fake_llm.calls[-1])
+
+
+def test_kunci_sesi_menolak_pesan_bersamaan(client, conn, fake_llm):
+    uid = login(client, "api_lock")
+    s = start(client, uid, fake_llm)
+    assert db.try_lock_session(conn, s["session_id"])       # seolah request lain sedang memproses
+    assert say(client, uid, s["session_id"], "hi").status_code == 409
+    db.unlock_session(conn, s["session_id"])
+    assert say(client, uid, s["session_id"], "hi").status_code == 200
+    assert conn.execute("SELECT busy_until FROM sessions WHERE id = %s",
+                        (s["session_id"],)).fetchone()["busy_until"] is None   # kunci dilepas setelah selesai
+
+
+def test_kunci_kedaluwarsa_tidak_membuat_sesi_macet(client, conn, fake_llm):
+    uid = login(client, "api_stale")
+    s = start(client, uid, fake_llm)
+    # Simulasi server mati di tengah proses: kunci tertinggal tetapi sudah lewat waktunya
+    conn.execute("UPDATE sessions SET busy_until = now() - interval '1 second' WHERE id = %s", (s["session_id"],))
+    assert say(client, uid, s["session_id"], "hi").status_code == 200
 
 
 # --- Keamanan & batas ---------------------------------------------------------------------

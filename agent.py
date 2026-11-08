@@ -1,8 +1,7 @@
 """Loop agen manual: LLM -> (tool calls -> hasil tool)* -> balasan teks."""
 
 import json
-import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import db
 from llm import MODEL, call_llm
@@ -156,7 +155,25 @@ class ChatState:
     messages: list[dict]
     turn: int = 0          # jumlah giliran pengguna yang sudah dipakai
     closed: bool = False   # True setelah sesi ditutup dan progres dihitung
-    lock: threading.Lock = field(default_factory=threading.Lock)  # cegah 2 pesan diproses bersamaan (web)
+
+    # Serialisasi: di web (Vercel) state disimpan ke sessions.state di antara request,
+    # karena request berikutnya bisa ditangani instance server yang berbeda.
+    def to_json(self) -> dict:
+        c = self.ctx
+        return {
+            "messages": self.messages, "turn": self.turn, "closed": self.closed,
+            "failed": sorted(c.failed), "correct": sorted(c.correct),
+            "ended": c.ended, "ringkasan": c.ringkasan, "persona": c.persona,
+        }
+
+    @classmethod
+    def from_json(cls, data: dict, user_id: int, session_id: int) -> "ChatState":
+        ctx = SessionContext(
+            conn=None, user_id=user_id, session_id=session_id, persona=data["persona"],
+            failed=set(data["failed"]), correct=set(data["correct"]),
+            ended=data["ended"], ringkasan=data["ringkasan"],
+        )
+        return cls(ctx=ctx, messages=data["messages"], turn=data["turn"], closed=data["closed"])
 
 
 def _exchange(state: ChatState, text: str, debug: bool) -> str:

@@ -92,6 +92,17 @@ def test_new_turn_mereset_catatan_giliran():
     assert (ctx.turn_mistakes, ctx.turn_tools, ctx.turn_corrections) == (0, [], [])
 
 
+def test_chatstate_serialisasi_bolak_balik_tanpa_kehilangan_data():
+    from agent import ChatState
+    ctx = SessionContext(conn=None, user_id=4, session_id=9, persona="lembut",
+                         failed={"to be"}, correct={"plural", "article"}, ended=True, ringkasan="ok")
+    original = ChatState(ctx=ctx, messages=[{"role": "system", "content": "x"}], turn=3, closed=False)
+    data = json.loads(json.dumps(original.to_json()))      # lewat JSON sungguhan, seperti ke kolom JSONB
+    back = ChatState.from_json(data, user_id=4, session_id=9)
+    assert back.to_json() == original.to_json()
+    assert back.ctx.failed == {"to be"} and back.ctx.persona == "lembut" and back.ctx.conn is None
+
+
 # --- Planner ------------------------------------------------------------------------------
 
 TOPICS = [{"urutan": 1, "judul": "A", "kali_dipelajari": 1}, {"urutan": 2, "judul": "B", "kali_dipelajari": 0}]

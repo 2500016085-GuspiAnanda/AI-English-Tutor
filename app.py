@@ -1,11 +1,17 @@
-"""API web (M4). Logika agen sama dengan CLI; file ini hanya menerjemahkan HTTP <-> fungsi agen.
+"""API web. Logika agen sama dengan CLI; file ini hanya menerjemahkan HTTP <-> fungsi agen.
 
 Jalankan  : uv run uvicorn app:app --reload
 Coba API  : buka http://127.0.0.1:8000/docs
+Deploy    : Vercel (FastAPI berjalan sebagai Vercel Function; file di public/ disajikan CDN)
+
+Server ini STATELESS: state percakapan disimpan di sessions.state (PostgreSQL), bukan di memori,
+karena di Vercel request berikutnya bisa ditangani instance yang berbeda. Bonus: sesi tetap utuh
+walau server restart.
 """
 
+import threading
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -23,23 +29,32 @@ from placement import LETTERS, QUESTIONS, grade
 from planner import plan_session
 from tools import SessionContext
 
-STATIC_DIR = Path(__file__).parent / "static"
+PUBLIC_DIR = Path(__file__).parent / "public"   # index.html + static/ (di Vercel disajikan langsung oleh CDN)
 pool = db.make_pool()
+_pool_lock = threading.Lock()
 
-# Sesi yang sedang berjalan, disimpan di memori server: session_id -> ChatState.
-# Konsekuensi: jika server restart, sesi yang sedang berjalan hilang (data di DB tetap aman).
-CHATS: dict[int, ChatState] = {}
+
+@contextmanager
+def db_conn():
+    """Pinjam satu koneksi dari pool. Pool dibuka saat pertama dibutuhkan, karena di lingkungan
+    serverless lifespan belum tentu dijalankan sebelum request pertama."""
+    if pool.closed:
+        with _pool_lock:
+            if pool.closed:
+                pool.open(wait=True)
+    with pool.connection() as conn:
+        yield conn
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    pool.open(wait=True)   # buka koneksi DB saat server menyala
     yield
-    pool.close()           # tutup saat server dimatikan
+    if not pool.closed:
+        pool.close()
 
 
 app = FastAPI(title="AI English Tutor", lifespan=lifespan)
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")   # style.css, app.js
+app.mount("/static", StaticFiles(directory=PUBLIC_DIR / "static"), name="static")   # untuk lokal
 
 
 @app.exception_handler(APIError)
@@ -79,40 +94,44 @@ def _user_or_404(conn, user_id: int) -> dict:
     return user
 
 
-def _chat_or_error(session_id: int, user_id: int) -> ChatState:
-    state = CHATS.get(session_id)
-    if state is None:
+def _load_chat(conn, session_id: int, user_id: int) -> ChatState:
+    row = db.load_chat_state(conn, session_id)
+    if row is None or row["state"] is None or row["state"]["closed"]:
         raise HTTPException(404, "sesi tidak ditemukan atau sudah berakhir")
-    if state.ctx.user_id != user_id:
+    if row["user_id"] != user_id:
         raise HTTPException(403, "sesi ini milik pengguna lain")
-    return state
+    return ChatState.from_json(row["state"], row["user_id"], session_id)
 
 
-def _run(state: ChatState, fn, *args) -> tuple[str, int]:
-    """Pinjam koneksi DB selama agen bekerja, dan tolak pesan kedua selagi pesan pertama diproses.
+def _run(session_id: int, user_id: int, fn, *args) -> tuple[ChatState, str, int]:
+    """Muat state dari DB, jalankan satu giliran agen, simpan lagi.
 
-    Kembalikan (balasan, lama_proses_ms).
+    Kunci sesi di DB mencegah dua pesan diproses bersamaan, termasuk bila keduanya jatuh ke
+    instance server yang berbeda. Kembalikan (state, balasan, lama_proses_ms).
     """
-    if not state.lock.acquire(blocking=False):
-        raise HTTPException(409, "pesan sebelumnya masih diproses")
-    try:
-        with pool.connection() as conn:
+    with db_conn() as conn:
+        _load_chat(conn, session_id, user_id)                 # 404/403 sebelum mengunci
+        if not db.try_lock_session(conn, session_id):
+            raise HTTPException(409, "pesan sebelumnya masih diproses")
+        try:
+            state = _load_chat(conn, session_id, user_id)     # muat ulang SETELAH terkunci: pasti versi terbaru
             state.ctx.conn = conn
             state.ctx.new_turn()
             t0 = time.perf_counter()
-            try:
-                return fn(state, *args), _ms_since(t0)
-            finally:
-                state.ctx.conn = None  # koneksi kembali ke pool
-    finally:
-        state.lock.release()
+            reply = fn(state, *args)
+            server_ms = _ms_since(t0)
+            db.save_chat_state(conn, session_id, state.to_json())
+            state.ctx.conn = None
+            return state, reply, server_ms
+        finally:
+            db.unlock_session(conn, session_id)
 
 
 def _ms_since(t0: float) -> int:
     return round((time.perf_counter() - t0) * 1000)
 
 
-def _chat_response(session_id: int, state: ChatState, reply: str, server_ms: int, user_turn: bool = False) -> dict:
+def _chat_response(state: ChatState, reply: str, server_ms: int, user_turn: bool = False) -> dict:
     ctx = state.ctx
     out = {
         "reply": reply, "turn": state.turn, "max_turns": MAX_TURNS, "selesai": state.closed,
@@ -122,10 +141,9 @@ def _chat_response(session_id: int, state: ChatState, reply: str, server_ms: int
         "stats": {"server_ms": server_ms, "llm_calls": ctx.turn_llm_calls, "tools": ctx.turn_tools},
     }
     if state.closed:
-        CHATS.pop(session_id, None)
-        with pool.connection() as conn:
-            out["ringkasan"] = state.ctx.ringkasan
-            out["progres"] = db.get_pattern_progress(conn, state.ctx.user_id)
+        with db_conn() as conn:
+            out["ringkasan"] = ctx.ringkasan
+            out["progres"] = db.get_pattern_progress(conn, ctx.user_id)
     return out
 
 
@@ -133,12 +151,12 @@ def _chat_response(session_id: int, state: ChatState, reply: str, server_ms: int
 
 @app.get("/", include_in_schema=False)
 def home():
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(PUBLIC_DIR / "index.html")
 
 
 @app.post("/api/login")
 def login(body: LoginIn):
-    with pool.connection() as conn:
+    with db_conn() as conn:
         user = db.get_or_create_user(conn, body.username.lower())
         used = db.count_sessions_today(conn, user["id"])
     return {**user, "sesi_hari_ini": used, "batas_sesi": MAX_SESSIONS_PER_DAY}
@@ -152,7 +170,7 @@ def placement_questions():
 
 @app.post("/api/placement")
 def placement(body: PlacementIn):
-    with pool.connection() as conn:
+    with db_conn() as conn:
         user = _user_or_404(conn, body.user_id)
         if user["sudah_tes"]:
             raise HTTPException(409, "tes penempatan sudah pernah dilakukan")
@@ -164,7 +182,7 @@ def placement(body: PlacementIn):
 @app.post("/api/persona")
 def set_persona(body: PersonaIn):
     """Simpan gaya mentor pilihan pengguna; berlaku mulai sesi berikutnya."""
-    with pool.connection() as conn:
+    with db_conn() as conn:
         _user_or_404(conn, body.user_id)
         db.set_persona(conn, body.user_id, body.persona)
     return {"persona": body.persona}
@@ -172,7 +190,7 @@ def set_persona(body: PersonaIn):
 
 @app.post("/api/sessions")
 def start_session(body: UserIn):
-    with pool.connection() as conn:
+    with db_conn() as conn:
         user = _user_or_404(conn, body.user_id)
         if not user["sudah_tes"]:
             raise HTTPException(409, "ikuti tes penempatan terlebih dahulu")
@@ -191,9 +209,9 @@ def start_session(body: UserIn):
         t0 = time.perf_counter()
         state, reply = start_chat(ctx, prompt)
         server_ms = _ms_since(t0)
+        db.save_chat_state(conn, session_id, state.to_json())
         ctx.conn = None
 
-    CHATS[session_id] = state
     return {
         "session_id": session_id,
         "level": user["level"],
@@ -201,28 +219,26 @@ def start_session(body: UserIn):
         "skenario": plan.skenario,
         "fokus_pola": plan.fokus_pola,
         "persona": persona,
-        **_chat_response(session_id, state, reply, server_ms),
+        **_chat_response(state, reply, server_ms),
     }
 
 
 @app.post("/api/sessions/{session_id}/messages")
 def send_message(session_id: int, body: MessageIn):
-    state = _chat_or_error(session_id, body.user_id)
-    reply, server_ms = _run(state, send_user_message, body.text)
-    return _chat_response(session_id, state, reply, server_ms, user_turn=True)
+    state, reply, server_ms = _run(session_id, body.user_id, send_user_message, body.text)
+    return _chat_response(state, reply, server_ms, user_turn=True)
 
 
 @app.post("/api/sessions/{session_id}/end")
 def end_session(session_id: int, body: UserIn):
-    state = _chat_or_error(session_id, body.user_id)
-    reply, server_ms = _run(state, finish_chat)
-    return _chat_response(session_id, state, reply, server_ms)
+    state, reply, server_ms = _run(session_id, body.user_id, finish_chat)
+    return _chat_response(state, reply, server_ms)
 
 
 @app.get("/api/users/{user_id}/memory")
 def memory(user_id: int):
     """Isi panel 'Yang diingat tentang kamu': memori jangka panjang agen yang tersimpan di database."""
-    with pool.connection() as conn:
+    with db_conn() as conn:
         _user_or_404(conn, user_id)
         return {
             "progres": db.get_pattern_progress(conn, user_id),

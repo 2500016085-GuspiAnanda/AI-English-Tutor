@@ -30,6 +30,8 @@ CREATE TABLE sessions (
     skenario   TEXT,                                       -- diisi untuk menengah/lanjut
     fokus_pola TEXT[] NOT NULL DEFAULT '{}',               -- 1-2 pola dari planner
     ringkasan  TEXT,                                       -- diisi oleh end_session
+    state      JSONB,                                      -- state percakapan yang sedang berjalan (web)
+    busy_until TIMESTAMPTZ,                                -- kunci: pesan sedang diproses sampai waktu ini
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CHECK (topic_id IS NOT NULL OR skenario IS NOT NULL)
 );
