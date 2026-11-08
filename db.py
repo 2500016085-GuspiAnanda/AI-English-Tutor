@@ -22,11 +22,15 @@ def get_or_create_user(conn, username: str) -> dict:
         """
         INSERT INTO users (username) VALUES (%s)
         ON CONFLICT (username) DO UPDATE SET username = EXCLUDED.username
-        RETURNING id, username, level, persona_default
+        RETURNING id, username, level, persona_default, sudah_tes
         """,
         (username,),
     ).fetchone()
     return row
+
+
+def set_placement(conn, user_id: int, level: str) -> None:
+    conn.execute("UPDATE users SET level = %s, sudah_tes = true WHERE id = %s", (level, user_id))
 
 
 def count_sessions_today(conn, user_id: int) -> int:
@@ -39,19 +43,20 @@ def count_sessions_today(conn, user_id: int) -> int:
 
 # --- kurikulum & sesi ----------------------------------------------------
 
-def next_topic(conn, user_id: int, level: str) -> dict | None:
-    """Topik berikutnya setelah topik sesi terakhir; kembali ke awal bila sudah habis."""
-    last = conn.execute(
+def list_topics_with_history(conn, user_id: int, level: str) -> list[dict]:
+    """Semua topik di level ini + berapa kali pengguna sudah mempelajarinya (bahan planner)."""
+    return conn.execute(
         """
-        SELECT t.urutan FROM sessions s JOIN curriculum_topics t ON t.id = s.topic_id
-        WHERE s.user_id = %s AND t.level = %s
-        ORDER BY s.created_at DESC LIMIT 1
+        SELECT t.id, t.urutan, t.judul, t.tujuan, t.contoh_kalimat,
+               count(s.id) AS kali_dipelajari, max(s.created_at)::date AS terakhir
+        FROM curriculum_topics t
+        LEFT JOIN sessions s ON s.topic_id = t.id AND s.user_id = %s
+        WHERE t.level = %s
+        GROUP BY t.id
+        ORDER BY t.urutan
         """,
         (user_id, level),
-    ).fetchone()
-    after = last["urutan"] if last else 0
-    sql = "SELECT * FROM curriculum_topics WHERE level = %s AND urutan > %s ORDER BY urutan LIMIT 1"
-    return conn.execute(sql, (level, after)).fetchone() or conn.execute(sql, (level, 0)).fetchone()
+    ).fetchall()
 
 
 def create_session(conn, user_id: int, topic_id: int | None, skenario: str | None, fokus_pola: list[str]) -> int:

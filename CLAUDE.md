@@ -24,6 +24,7 @@ Tujuan utama: portofolio belajar agentic AI (tool calling, memori, planner).
 ## Desain produk
 - Hanya bahasa Inggris. Level: pemula (dari nol), menengah, lanjut.
 - Tes penempatan 5 soal saat pertama masuk; opsi "mulai dari nol" melewati tes.
+  Pilihan ganda statis di `placement.py`, dinilai kode: skor 0-2 pemula, 3-4 menengah, 5 lanjut.
 - Bahasa penjelasan: pemula = Indonesia, menengah = campuran, lanjut = English.
 - Persona dinamis: galak saat pengguna salah, santai saat benar.
   Pemula: tegas tanpa sarkas. Menengah/lanjut: boleh sarkas ke jawaban, tidak pernah menghina orangnya.
@@ -52,7 +53,7 @@ Prompt caching: bagian statis (persona, definisi tool, aturan level) di depan,
 bagian dinamis (error log, riwayat) di belakang.
 
 ## Tabel
-- `users`: id, username, level, persona_default, created_at
+- `users`: id, username, level, persona_default, sudah_tes, created_at
 - `curriculum_topics`: id, level, urutan, judul, tujuan, contoh_kalimat
 - `sessions`: id, user_id, topic_id/skenario, fokus_pola, ringkasan, created_at
 - `messages`: id, session_id, role, content, model, tokens, created_at
@@ -65,9 +66,9 @@ Gunakan `GENERATED ALWAYS AS IDENTITY`, `TIMESTAMPTZ`, `BOOLEAN`, dan
 
 ## Milestone
 1. M1: spike test tool calling DeepSeek (`spike_m1.py`)  -- selesai
-2. M2: loop agen di CLI + 4 tool + PostgreSQL  <- posisi sekarang
-3. M3: planner + tes penempatan + level
-4. M4: FastAPI + halaman web mode teks
+2. M2: loop agen di CLI + 4 tool + PostgreSQL  -- selesai
+3. M3: planner + tes penempatan + level  -- selesai
+4. M4: FastAPI + halaman web mode teks  <- posisi sekarang
 5. M5: voice (Web Speech API)
 6. M6: deploy ke VPS (PostgreSQL hanya listen di localhost) + uji coba teman sekelas
 

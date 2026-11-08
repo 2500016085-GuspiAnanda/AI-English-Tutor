@@ -17,14 +17,17 @@ _client = OpenAI(
 MAX_RETRY = 2
 
 
-def call_llm(messages: list[dict], tools: list[dict] | None = None):
+def call_llm(messages: list[dict], tools: list[dict] | None = None, json_mode: bool = False):
     """Kirim percakapan ke DeepSeek, kembalikan objek ChatCompletion.
 
+    json_mode=True memaksa balasan berupa objek JSON (dipakai planner).
     Gagal setelah 1 percobaan + 2 retry -> exception diteruskan ke pemanggil.
     """
     kwargs = {"model": MODEL, "messages": messages}
     if tools:
         kwargs["tools"] = tools
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
     for attempt in range(MAX_RETRY + 1):
         try:
             return _client.chat.completions.create(**kwargs)
