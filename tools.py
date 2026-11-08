@@ -69,10 +69,12 @@ class SessionContext:
     turn_correct: int = 0
     turn_tools: list[str] = field(default_factory=list)
     turn_llm_calls: int = 0
+    turn_corrections: list[dict] = field(default_factory=list)  # data save_mistake giliran ini (untuk "coretan pena merah")
 
     def new_turn(self) -> None:
         self.turn_mistakes = self.turn_correct = self.turn_llm_calls = 0
         self.turn_tools = []
+        self.turn_corrections = []
 
     def mood(self, user_turn: bool = False) -> str:
         """Ekspresi tutor diambil dari keputusan agen sendiri (tool yang dipanggil), bukan ditebak dari teks.
@@ -104,6 +106,7 @@ def execute_tool(ctx: SessionContext, name: str, arguments: str) -> str:
         db.record_pattern_failure(ctx.conn, ctx.user_id, args.pola)
         ctx.failed.add(args.pola)
         ctx.turn_mistakes += 1
+        ctx.turn_corrections.append(args.model_dump())
         return _out(ok=True, mistake_id=mid)
 
     if isinstance(args, GetErrorLog):

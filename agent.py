@@ -52,8 +52,13 @@ WRAPUP = "[SISTEM] Sesi selesai. Jangan bertanya lagi. Panggil end_session denga
 QUIT_WORDS = {"/selesai", "/quit", "exit", "quit"}
 
 
+# Sengaja TIDAK menyebut bahwa koreksi tampil otomatis di layar: saat diuji, kalimat semacam itu
+# membuat model berhenti memanggil save_mistake (kesalahan tidak tersimpan). Cukup larang emoji.
+WEB_UI_NOTE = "- antarmuka: web. Tulis balasan tanpa emoji."
+
+
 def build_dynamic_prompt(user: dict, topic: dict | None, skenario: str | None, fokus: list[str],
-                         progress: list[dict], errors: list[dict]) -> str:
+                         progress: list[dict], errors: list[dict], web: bool = False) -> str:
     """Bagian DINAMIS: data pengguna dan sesi -> diletakkan di belakang agar tidak merusak cache."""
     lines = [
         "## Data sesi ini",
@@ -61,6 +66,8 @@ def build_dynamic_prompt(user: dict, topic: dict | None, skenario: str | None, f
         f"- username: {user['username']}",
         f"- level: {user['level']}",
     ]
+    if web:
+        lines.append(WEB_UI_NOTE)
     if topic:
         lines.append(f"- topik: {topic['judul']} — tujuan: {topic['tujuan']}")
         if topic.get("contoh_kalimat"):

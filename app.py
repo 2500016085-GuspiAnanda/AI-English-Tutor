@@ -110,6 +110,7 @@ def _chat_response(session_id: int, state: ChatState, reply: str, server_ms: int
     out = {
         "reply": reply, "turn": state.turn, "max_turns": MAX_TURNS, "selesai": state.closed,
         "mood": ctx.mood(user_turn and not state.closed),
+        "koreksi": ctx.turn_corrections,  # kalimat asli -> benar, langsung dari tool save_mistake
         # Info kecepatan & jejak agen untuk giliran ini
         "stats": {"server_ms": server_ms, "llm_calls": ctx.turn_llm_calls, "tools": ctx.turn_tools},
     }
@@ -167,7 +168,8 @@ def start_session(body: UserIn):
             raise HTTPException(500, "kurikulum pemula kosong, jalankan seed.sql")
         session_id = db.create_session(conn, user["id"], topic["id"] if topic else None, plan.skenario, plan.fokus_pola)
 
-        prompt = STATIC_PROMPT + "\n" + build_dynamic_prompt(user, topic, plan.skenario, plan.fokus_pola, progress, errors)
+        prompt = STATIC_PROMPT + "\n" + build_dynamic_prompt(
+            user, topic, plan.skenario, plan.fokus_pola, progress, errors, web=True)
         ctx = SessionContext(conn=conn, user_id=user["id"], session_id=session_id)
         t0 = time.perf_counter()
         state, reply = start_chat(ctx, prompt)

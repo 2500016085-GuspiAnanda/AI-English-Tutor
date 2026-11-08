@@ -4,151 +4,272 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI English Tutor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap">
 <style>
-  /* ---------- Warna: terang & gelap (mengikuti pengaturan sistem) ---------- */
+  /* =====================================================================
+     Arah visual: terang, lapang, percaya diri (terinspirasi gaya ilingo.id),
+     dengan satu ciri sendiri: koreksi tampil sebagai coretan pena merah.
+     Merah HANYA untuk kesalahan bahasa; hijau HANYA untuk benar/dikuasai.
+     ===================================================================== */
   :root {
-    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #667085;
-    --line: #e4e7ec; --accent: #2f6fed; --accent-text: #ffffff;
-    --tutor: #eef2f8; --user: #2f6fed; --user-text: #ffffff;
-    --bad: #d92d20; --good: #079455;
+    --bg: #f3f6f8;  --bg-tint: #e2ecf2;  --surface: #ffffff;  --surface-2: #f5f8fa;
+    --ink: #0f2a3d; --ink-2: #33495a;    --muted: #566b7c;    --line: #dbe4ea;
+    --primary: #1d587c; --primary-hover: #174a69; --primary-soft: #e3eef5;
+    --pen: #c2382d; --pen-soft: #fbe8e5;  --ok: #1d7448;  --ok-soft: #e0f1e7;
+    --f-ui: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
+    --f-hand: "Caveat", "Segoe Print", cursive;
+    --t-1: .8125rem; --t0: .9375rem; --t1: 1.0625rem; --t2: 1.25rem; --t3: 1.75rem; --t4: clamp(2.1rem, 5.5vw, 3.4rem);
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 56px;
+    --r-ctl: 12px; --r-card: 22px; --r-note: 6px 20px 20px 20px; --r-mine: 20px 20px 6px 20px;
+    --sh-1: 0 1px 2px rgba(15, 42, 61, .06), 0 6px 20px rgba(15, 42, 61, .06);
+    --sh-2: 0 2px 4px rgba(15, 42, 61, .08), 0 12px 32px rgba(29, 88, 124, .16);
+    --ease: cubic-bezier(.2, .7, .2, 1); --d1: 120ms; --d2: 220ms;
+    color-scheme: light;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #12151c; --card: #1a1f29; --text: #e6e9ef; --muted: #98a2b3;
-      --line: #2a3140; --accent: #5b8cff; --accent-text: #0b0e14;
-      --tutor: #222a37; --user: #3b6fe0; --user-text: #ffffff;
-      --bad: #ff6b5b; --good: #4cc38a;
-    }
-  }
+
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
-  h1 { font-size: 1.4rem; margin: 0 0 4px; }
-  h2 { font-size: 1.15rem; margin: 0 0 12px; }
-  .muted { color: var(--muted); font-size: .9rem; }
-  .small { font-size: .82rem; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-top: 16px; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; color: var(--ink); font: 400 var(--t1)/1.6 var(--f-ui);
+         background: linear-gradient(180deg, var(--bg-tint) 0, var(--bg) 460px) no-repeat, var(--bg); }
+  button, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; border-radius: 6px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .skip { position: absolute; left: var(--s4); top: -100px; background: var(--ink); color: #fff;
+          padding: var(--s2) var(--s3); border-radius: var(--r-ctl); z-index: 10; }
+  .skip:focus { top: var(--s2); }
   .hidden { display: none !important; }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round;
+          stroke-linejoin: round; vertical-align: -4px; flex: none; }
+
+  main { max-width: 820px; margin: 0 auto; padding: var(--s5) var(--s5) var(--s7); }
+  @media (max-width: 560px) { main { padding: var(--s3) var(--s4) var(--s7); } }
+
+  /* Bar aplikasi melayang */
+  .appbar { display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+            background: var(--surface); border-radius: 18px; padding: 10px 12px 10px 14px; box-shadow: var(--sh-1); }
+  .appbar h1 { display: flex; align-items: center; gap: 10px; margin: 0; font: 800 var(--t1)/1 var(--f-ui); letter-spacing: -.01em; }
+  .appbar h1 svg { width: 34px; height: 30px; }
+  .appbar .who { color: var(--muted); font-size: var(--t-1); font-weight: 600; }
+
+  h2 { font: 800 var(--t3)/1.2 var(--f-ui); letter-spacing: -.025em; margin: 0 0 var(--s3); }
+  p { margin: 0 0 var(--s3); }
+  .muted { color: var(--muted); }
+  .small { font-size: var(--t-1); }
+  .row { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
+  .panel { margin-top: var(--s6); }
+  .card { background: var(--surface); border-radius: var(--r-card); padding: var(--s6); box-shadow: var(--sh-1); }
+  @media (max-width: 560px) { .card { padding: var(--s5) var(--s4); } }
+
+  /* Hero layar masuk */
+  .hero { text-align: center; padding: var(--s7) 0 var(--s6); }
+  .hero .headline { font: 800 var(--t4)/1.06 var(--f-ui); letter-spacing: -.035em; margin: 0 auto var(--s4); max-width: 19ch; text-wrap: balance; }
+  .hero .lede { font-size: var(--t2); color: var(--ink-2); max-width: 40ch; margin: 0 auto; }
+  .facts { color: var(--muted); font-size: var(--t0); font-weight: 600; text-align: center; margin-top: var(--s5);
+           font-variant-numeric: tabular-nums; }
+  .login-card { max-width: 520px; margin: 0 auto; }
+
+  /* Kontrol */
+  label.field { display: block; font-weight: 700; margin-bottom: var(--s2); }
   input[type=text], textarea {
-    width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
-    background: var(--bg); color: var(--text); font: inherit; }
-  button {
-    padding: 10px 16px; border: 0; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600;
-    background: var(--accent); color: var(--accent-text); }
-  button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
-  button.sm { padding: 6px 10px; font-size: .85rem; }
-  button:disabled { opacity: .5; cursor: not-allowed; }
-  .error { color: var(--bad); margin-top: 10px; min-height: 1.5em; }
+    width: 100%; padding: 13px var(--s4); border: 1.5px solid var(--line); border-radius: var(--r-ctl);
+    background: var(--surface-2); transition: border-color var(--d1) var(--ease), background var(--d1) var(--ease); }
+  input[type=text]:hover, textarea:hover { border-color: #b9c8d3; }
+  input[type=text]:focus-visible, textarea:focus-visible { border-color: var(--primary); background: var(--surface); outline: none;
+                                                           box-shadow: 0 0 0 4px var(--primary-soft); }
+  button { cursor: pointer; border: 0; border-radius: var(--r-ctl); padding: 13px 22px; font-weight: 700;
+           background: var(--primary); color: #fff; box-shadow: 0 6px 16px rgba(29, 88, 124, .22);
+           transition: transform var(--d1) var(--ease), background var(--d1) var(--ease), box-shadow var(--d1) var(--ease); }
+  button:hover:not(:disabled) { background: var(--primary-hover); }
+  button:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 2px 6px rgba(29, 88, 124, .2); }
+  button.quiet { background: var(--surface-2); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--line); }
+  button.quiet:hover:not(:disabled) { background: var(--primary-soft); }
+  button.sm { padding: 8px 12px; font-size: var(--t-1); display: inline-flex; gap: 6px; align-items: center; border-radius: 10px; }
+  button:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+  .notice { display: flex; gap: var(--s2); align-items: flex-start; color: var(--ink-2); font-weight: 700; margin-top: var(--s3); }
+  .notice:empty { display: none; }
 
-  /* ---------- Tes penempatan ---------- */
-  .question { margin-bottom: 18px; }
-  .question label { display: block; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
-  .question label:hover { background: var(--tutor); }
+  /* Tes penempatan */
+  fieldset.question { border: 0; padding: 0; margin: 0 0 var(--s5); }
+  fieldset.question legend { font: 700 var(--t2)/1.4 var(--f-ui); margin-bottom: var(--s3); padding: 0; }
+  .question .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--s2); }
+  .question label { display: flex; gap: var(--s3); align-items: center; padding: var(--s3) var(--s4); cursor: pointer;
+                    border-radius: var(--r-ctl); box-shadow: inset 0 0 0 1.5px var(--line); background: var(--surface-2);
+                    transition: background var(--d1) var(--ease), box-shadow var(--d1) var(--ease); }
+  .question label:hover { background: var(--primary-soft); }
+  .question label:has(input:checked) { background: var(--primary-soft); box-shadow: inset 0 0 0 2px var(--primary); }
+  .question input { width: 18px; height: 18px; accent-color: var(--primary); }
+  .question .letter { font-weight: 800; color: var(--muted); }
 
-  /* ---------- Header sesi ---------- */
-  #chat-info { position: sticky; top: 0; background: var(--bg); padding: 8px 0; border-bottom: 1px solid var(--line);
-               z-index: 2; justify-content: space-between; }
+  /* Beranda */
+  .stats-line { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stats-line strong { color: var(--ink); }
+  .quota { display: inline-flex; gap: 6px; vertical-align: middle; margin-left: var(--s2); }
+  .quota span { width: 20px; height: 20px; border: 1.5px solid #9fb3c1; border-radius: 6px; display: grid; place-items: center; }
+  .quota span.used { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .quota .icon { width: 13px; height: 13px; stroke-width: 3; }
 
-  /* ---------- Mode suara: panggung dengan wajah tutor ---------- */
-  #stage { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 16px 0 8px; }
-  #stage-user { min-height: 1.4em; font-style: italic; }
-  #stage-reply { max-width: 100%; text-align: left; max-height: 34vh; overflow-y: auto; }
+  /* Header sesi */
+  #chat-info { position: sticky; top: 0; z-index: 3; padding: var(--s3) 0; justify-content: space-between;
+               background: var(--bg); border-bottom: 1.5px solid var(--line); }
+  #chat-info-text { color: var(--muted); font-size: var(--t-1); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* ---------- Mode suara ---------- */
+  #stage { display: flex; flex-direction: column; align-items: center; gap: var(--s4); padding: var(--s5) 0 var(--s3); }
+  #stage-user { font: 600 var(--t2)/1.45 var(--f-ui); color: var(--ink-2); text-align: center; max-width: 50ch; }
+  #stage-user:empty, #stage-marks:empty { display: none; }
+  #stage-reply { width: 100%; max-height: 40vh; overflow-y: auto; }
   #stage-reply:empty { display: none; }
-  #stage-controls { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+  #stage-controls { display: flex; flex-direction: column; align-items: center; gap: var(--s3); width: 100%; padding-top: var(--s2); }
   #stage-form { width: 100%; flex-wrap: nowrap; }
-  .live { min-height: 1.4em; color: var(--muted); font-size: .9rem; }
+  .live { min-height: 1.5em; color: var(--muted); font-size: var(--t0); font-weight: 600; text-align: center; }
+  .live.rec::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 8px; border-radius: 50%;
+                      background: var(--pen); vertical-align: 1px; animation: blink 1s infinite; }
+  .live.warn { color: var(--ink-2); font-weight: 700; }
 
-  /* Wajah: satu SVG, bagian-bagiannya ditampilkan/disembunyikan oleh data-mood & data-activity */
-  #face { width: 190px; position: relative; }
+  /* Wajah tutor */
+  #face { width: 170px; filter: drop-shadow(0 10px 18px rgba(15, 42, 61, .10)); }
   #face svg { width: 100%; height: auto; display: block; overflow: visible; }
-  #face .head { fill: var(--card); stroke: var(--accent); stroke-width: 6; transition: stroke .3s; }
-  #face .ink  { fill: none; stroke: var(--text); stroke-width: 6; stroke-linecap: round; }
-  #face .dot  { fill: var(--text); }
-  #face .mouth, #face .eyes, #face .brows, #face .fire, #face .thinking { display: none; }
-  #face::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: -14px; height: 10px;
-                 border-radius: 50%; background: rgba(0,0,0,.18); filter: blur(4px); }
-  /* ekspresi (hasil giliran terakhir) */
-  #face[data-mood=netral] .eyes-open, #face[data-mood=netral] .mouth-flat  { display: inline; }
-  #face[data-mood=senang] .eyes-happy, #face[data-mood=senang] .mouth-smile { display: inline; }
-  #face[data-mood=senang] .head { stroke: var(--good); }
+  #face .head { fill: var(--surface); stroke: var(--ink); stroke-width: 5; stroke-linejoin: round; }
+  #face .ink { fill: none; stroke: var(--ink); stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; }
+  #face .dot { fill: var(--ink); }
+  #face .pen { fill: none; stroke: var(--pen); stroke-width: 5; stroke-linecap: round; }
+  #face .okmark { fill: none; stroke: var(--ok); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+  #face .mouth, #face .eyes, #face .brows, #face .vein, #face .tick, #face .thinking { display: none; }
+  #face[data-mood=netral] .eyes-open, #face[data-mood=netral] .mouth-flat { display: inline; }
+  #face[data-mood=senang] .eyes-happy, #face[data-mood=senang] .mouth-smile, #face[data-mood=senang] .tick { display: inline; }
   #face[data-mood=marah] .eyes-open, #face[data-mood=marah] .brows,
-  #face[data-mood=marah] .mouth-o, #face[data-mood=marah] .fire { display: inline; }
-  #face[data-mood=marah] .head { stroke: var(--bad); }
-  #face[data-mood=marah] svg { animation: shake .4s 2; }
-  /* aktivitas (sedang apa sekarang) */
-  #face[data-activity=listening] .head { stroke: var(--accent); animation: pulse 1s infinite; }
+  #face[data-mood=marah] .mouth-o, #face[data-mood=marah] .vein { display: inline; }
+  #face[data-mood=marah] svg { animation: shake 360ms var(--ease) 1; }
+  #face[data-activity=listening] .head { stroke: var(--primary); animation: pulse 1s var(--ease) infinite; }
   #face[data-activity=thinking] .thinking { display: inline; }
   #face[data-activity=thinking] .eyes { transform: translateY(-5px); }
   #face[data-activity=speaking] .mouth { display: none; }
   #face[data-activity=speaking] .mouth-talk { display: inline; transform-box: fill-box; transform-origin: center;
-                                              animation: talk .28s infinite alternate; }
+                                              animation: talk 260ms var(--ease) infinite alternate; }
   #face .thinking circle { animation: blink 1.2s infinite; }
   #face .thinking circle:nth-child(2) { animation-delay: .2s; }
   #face .thinking circle:nth-child(3) { animation-delay: .4s; }
-  @keyframes pulse { 50% { stroke-width: 11; } }
-  @keyframes talk { from { transform: scaleY(.25); } to { transform: scaleY(1); } }
-  @keyframes blink { 50% { opacity: .2; } }
-  @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+  @keyframes pulse { 50% { stroke-width: 9; } }
+  @keyframes talk { from { transform: scaleY(.3); } to { transform: scaleY(1); } }
+  @keyframes blink { 50% { opacity: .25; } }
+  @keyframes shake { 30% { transform: rotate(-3deg); } 70% { transform: rotate(3deg); } }
 
   /* Tombol tahan-untuk-bicara */
-  #btn-ptt { width: 76px; height: 76px; border-radius: 50%; font-size: 30px; padding: 0;
-             touch-action: none; user-select: none; -webkit-user-select: none; }
-  #btn-ptt.listening, #btn-ptt2.listening { background: var(--bad); color: #fff; border-color: var(--bad); transform: scale(1.08); }
+  #btn-ptt { width: 84px; height: 84px; border-radius: 50%; padding: 0; display: grid; place-items: center;
+             box-shadow: var(--sh-2); touch-action: none; user-select: none; -webkit-user-select: none; }
+  #btn-ptt .icon { width: 32px; height: 32px; }
+  #btn-ptt.listening, #btn-ptt2.listening { background: var(--pen); color: #fff; transform: scale(1.06);
+                                            box-shadow: 0 0 0 8px var(--pen-soft); }
+  .hint { color: var(--muted); font-size: var(--t-1); font-weight: 600; text-align: center; }
+  kbd { font: 700 var(--t-1) var(--f-ui); padding: 1px 7px; border-radius: 6px; background: var(--surface);
+        box-shadow: inset 0 -2px 0 var(--line), inset 0 0 0 1.5px var(--line); }
 
-  /* ---------- Mode chat ---------- */
-  #messages { display: flex; flex-direction: column; gap: 10px; padding: 16px 0 24px; }
-  .bubble { max-width: 85%; padding: 10px 14px; border-radius: 14px; overflow-wrap: anywhere; }
-  .bubble p { margin: 0 0 8px; } .bubble p:last-child { margin-bottom: 0; }
-  .bubble ul, .bubble ol { margin: 4px 0 8px; padding-left: 20px; }
-  .bubble blockquote { margin: 6px 0; padding-left: 10px; border-left: 3px solid var(--accent); }
-  .bubble code { background: rgba(127,127,127,.15); padding: 1px 4px; border-radius: 4px; }
-  .tutor { align-self: flex-start; background: var(--tutor); border-bottom-left-radius: 4px; }
-  .user  { align-self: flex-end; background: var(--user); color: var(--user-text); border-bottom-right-radius: 4px; white-space: pre-wrap; }
-  .typing { align-self: flex-start; color: var(--muted); font-style: italic; }
-  .bubble .replay { display: block; margin-top: 6px; padding: 2px 8px; font-size: .8rem; font-weight: 500;
-                    background: transparent; color: var(--muted); border: 1px solid var(--line); }
-  #composer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg); border-top: 1px solid var(--line); }
-  #composer .inner { max-width: 720px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 8px; }
-  #composer textarea { resize: none; height: 48px; }
-  #composer .live { max-width: 720px; margin: 0 auto; padding: 8px 16px 0; }
-  body.composer-open main { padding-bottom: 130px; }
+  /* ---------- Coretan pena merah ---------- */
+  .marks { display: flex; flex-direction: column; gap: var(--s3); }
+  #stage-marks { width: 100%; max-width: 580px; background: var(--surface); border-radius: var(--r-card);
+                 padding: var(--s4) var(--s5); box-shadow: var(--sh-1); }
+  .mark { padding-left: var(--s3); border-left: 3px solid var(--pen); }
+  .mark .was { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--pen); text-decoration-thickness: 2px; }
+  .mark .fix { display: block; font: 600 1.65rem/1.15 var(--f-hand); color: var(--pen); margin-top: 2px; }
+  .mark .why { display: block; font-size: var(--t-1); color: var(--muted); font-weight: 600; margin-top: 2px; }
+  #messages .marks { align-self: flex-end; max-width: 85%; background: var(--surface); border-radius: var(--r-ctl);
+                     padding: var(--s3) var(--s4); box-shadow: var(--sh-1); }
 
-  /* ---------- Info kecepatan, memori, rekap ---------- */
-  #stats { text-align: center; min-height: 1.3em; }
-  #memory { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: var(--card); }
-  #memory summary { cursor: pointer; font-weight: 600; }
-  #memory ul { margin: 8px 0; padding-left: 18px; }
-  .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .78rem; border: 1px solid var(--line); margin-left: 6px; }
-  .chip.ok { color: var(--good); border-color: var(--good); }
-  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
-  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  /* ---------- Balon ---------- */
+  #messages { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s5) 0; }
+  .bubble { max-width: 85%; padding: var(--s3) var(--s4); overflow-wrap: anywhere; }
+  .bubble p { margin: 0 0 var(--s2); } .bubble p:last-child { margin-bottom: 0; }
+  .bubble ul, .bubble ol { margin: var(--s1) 0 var(--s2); padding-left: 22px; }
+  .bubble blockquote { margin: var(--s2) 0; padding: var(--s1) var(--s3); border-left: 3px solid var(--primary);
+                       background: var(--primary-soft); border-radius: 0 8px 8px 0; }
+  .bubble code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+  .tutor { align-self: flex-start; background: var(--surface); border-radius: var(--r-note); box-shadow: var(--sh-1); }
+  #stage-reply.tutor { max-width: 100%; font-size: var(--t2); line-height: 1.6; padding: var(--s5) var(--s6); }
+  @media (max-width: 560px) { #stage-reply.tutor { padding: var(--s4); font-size: var(--t1); } }
+  .user { align-self: flex-end; background: var(--primary); color: #fff; border-radius: var(--r-mine); white-space: pre-wrap; }
+  .system { align-self: flex-start; display: flex; gap: var(--s2); color: var(--ink-2); font-weight: 700; }
+  .typing { align-self: flex-start; color: var(--muted); font-weight: 600; }
+  .replay { display: inline-flex; gap: 6px; align-items: center; margin-top: var(--s3); padding: 5px 10px; border-radius: 999px;
+            font: 700 var(--t-1) var(--f-ui); background: var(--primary-soft); color: var(--primary); box-shadow: none; }
+  .replay:hover:not(:disabled) { background: #d3e5ef; }
+  .replay .icon { width: 16px; height: 16px; }
+
+  #composer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 3; background: var(--surface);
+              box-shadow: 0 -6px 20px rgba(15, 42, 61, .06); }
+  #composer .inner { max-width: 820px; margin: 0 auto; padding: var(--s3) var(--s5); display: flex; gap: var(--s2); }
+  #composer textarea { resize: none; height: 50px; }
+  #composer .live { max-width: 820px; margin: 0 auto; padding: var(--s2) var(--s5) 0; text-align: left; }
+  @media (max-width: 560px) { #composer .inner, #composer .live { padding-left: var(--s4); padding-right: var(--s4); } }
+  body.composer-open main { padding-bottom: 150px; }
+
+  /* ---------- Info kecepatan, catatan tutor, rekap ---------- */
+  #stats { text-align: center; color: var(--muted); font-size: var(--t-1); font-weight: 600; font-variant-numeric: tabular-nums; min-height: 1.4em; }
+  #memory { margin-top: var(--s5); background: var(--surface); border-radius: var(--r-card); padding: var(--s4) var(--s5); box-shadow: var(--sh-1); }
+  #memory summary { cursor: pointer; font-weight: 800; display: flex; gap: var(--s2); align-items: center; }
+  #memory h3 { font: 800 var(--t-1)/1.4 var(--f-ui); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: var(--s4) 0 var(--s2); }
+  #memory ul { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--s2); }
+  .chip { display: inline-flex; gap: 4px; align-items: center; padding: 2px 10px; border-radius: 999px; font-size: var(--t-1); font-weight: 700;
+          font-variant-numeric: tabular-nums; color: var(--ink-2); background: var(--surface-2); box-shadow: inset 0 0 0 1.5px var(--line); margin-left: var(--s2); }
+  .chip.ok { color: var(--ok); background: var(--ok-soft); box-shadow: none; }
+  .chip .icon { width: 14px; height: 14px; stroke-width: 2.6; }
+  #recap { margin-top: var(--s6); }
+  #recap .sheet { background: var(--surface); border-radius: var(--r-card); padding: var(--s6); box-shadow: var(--sh-1); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; margin-top: var(--s2); }
+  th { text-align: left; font-size: var(--t-1); color: var(--muted); font-weight: 800; padding: var(--s2) var(--s1); border-bottom: 1.5px solid var(--line); }
+  td { padding: var(--s3) var(--s1); border-bottom: 1px solid var(--line); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
-<main>
-  <h1>AI English Tutor</h1>
-  <div class="muted">Latihan percakapan bahasa Inggris dengan tutor AI</div>
+<a class="skip" href="#main">Langsung ke isi</a>
+<main id="main">
+  <header class="appbar">
+    <h1>
+      <svg viewBox="0 0 200 170" aria-hidden="true">
+        <path d="M58 38 C96 30 140 31 162 41 C176 62 178 110 167 137 C130 149 72 150 37 139 C26 112 25 66 39 43 Z"
+              fill="#fff" stroke="#0f2a3d" stroke-width="12"/>
+        <circle cx="77" cy="86" r="11" fill="#0f2a3d"/><circle cx="124" cy="86" r="11" fill="#0f2a3d"/>
+        <path d="M80 112 q21 18 42 0" fill="none" stroke="#c2382d" stroke-width="11" stroke-linecap="round"/>
+      </svg>
+      AI English Tutor
+    </h1>
+    <span class="who" id="who"></span>
+  </header>
 
-  <!-- ===== Layar 1: Login ===== -->
-  <section id="screen-login" class="card">
-    <h2>Masuk</h2>
-    <form id="login-form" class="row">
-      <input type="text" id="username" placeholder="Username (huruf, angka, _ . -)" autocomplete="username" required style="flex:1">
-      <button type="submit">Masuk</button>
+  <!-- ===== Layar 1: Masuk ===== -->
+  <section id="screen-login" aria-labelledby="h-login">
+    <div class="hero">
+      <p class="headline" id="h-login" role="heading" aria-level="2">Ngomong bahasa Inggris, langsung dikoreksi.</p>
+      <p class="lede">Tutor AI mendengar kalimatmu, mencoret yang salah, lalu mengingatnya untuk dilatih lagi di sesi berikutnya.</p>
+    </div>
+    <div class="card login-card">
+    <form id="login-form">
+      <label class="field" for="username">Username</label>
+      <div class="row" style="flex-wrap:nowrap">
+        <input type="text" id="username" autocomplete="username" required maxlength="40"
+               pattern="[A-Za-z0-9_.\-]+" aria-describedby="username-hint">
+        <button type="submit">Masuk</button>
+      </div>
+      <p id="username-hint" class="muted small" style="margin-top:var(--s2)">Huruf, angka, titik, garis bawah. Belum punya? Ketik username baru, akunnya langsung dibuat.</p>
     </form>
-    <div class="error" id="login-error"></div>
+    <div class="notice" id="login-error" role="alert"></div>
+    </div>
+    <p class="facts">Tes penempatan 5 soal · maks. 10 giliran per sesi · 3 sesi per hari · gratis</p>
   </section>
 
   <!-- ===== Layar 2: Tes penempatan ===== -->
-  <section id="screen-placement" class="card hidden">
-    <h2>Tes penempatan</h2>
+  <section id="screen-placement" class="panel card hidden" aria-labelledby="h-placement">
+    <h2 id="h-placement">Tes penempatan</h2>
     <div id="placement-intro">
-      <p>5 soal pilihan ganda untuk menentukan levelmu. Kalau benar-benar baru belajar, boleh langsung mulai dari nol.</p>
+      <p>Lima soal pilihan ganda, kira-kira dua menit. Hasilnya menentukan seberapa banyak tutor memakai bahasa Indonesia.</p>
       <div class="row">
-        <button id="btn-take-test">Ikut tes</button>
-        <button id="btn-skip-test" class="secondary">Mulai dari nol (pemula)</button>
+        <button id="btn-take-test">Mulai tes</button>
+        <button id="btn-skip-test" class="quiet">Saya mulai dari nol</button>
       </div>
     </div>
     <form id="placement-form" class="hidden">
@@ -156,31 +277,31 @@
       <button type="submit">Kirim jawaban</button>
     </form>
     <div id="placement-result" class="hidden">
-      <p id="placement-result-text"></p>
+      <p id="placement-result-text" style="font: 600 var(--t2)/1.4 var(--f-read)"></p>
       <button id="btn-to-home">Lanjut</button>
     </div>
-    <div class="error" id="placement-error"></div>
+    <div class="notice" id="placement-error" role="alert"></div>
   </section>
 
   <!-- ===== Layar 3: Beranda ===== -->
-  <section id="screen-home" class="card hidden">
+  <section id="screen-home" class="panel card hidden" aria-labelledby="home-greeting">
     <h2 id="home-greeting"></h2>
-    <p id="home-info"></p>
+    <p id="home-info" class="stats-line"></p>
     <div class="row">
       <button id="btn-start">Mulai sesi</button>
-      <button id="btn-logout" class="secondary">Ganti pengguna</button>
+      <button id="btn-logout" class="quiet">Ganti pengguna</button>
     </div>
-    <div class="error" id="home-error"></div>
+    <div class="notice" id="home-error" role="alert"></div>
   </section>
 
-  <!-- ===== Layar 4: Sesi (mode suara / mode chat) ===== -->
-  <section id="screen-chat" class="hidden">
+  <!-- ===== Layar 4: Sesi ===== -->
+  <section id="screen-chat" class="panel hidden" aria-label="Sesi latihan">
     <div id="chat-info" class="row">
-      <span id="chat-info-text" class="muted"></span>
+      <span id="chat-info-text"></span>
       <span class="row">
-        <button id="btn-tts" class="secondary sm" title="Suara tutor nyala/mati">🔊</button>
-        <button id="btn-mode" class="secondary sm"></button>
-        <button id="btn-end" class="secondary sm" title="Akhiri sesi dan lihat rekap">Selesai</button>
+        <button id="btn-tts" class="quiet sm"></button>
+        <button id="btn-mode" class="quiet sm"></button>
+        <button id="btn-end" class="quiet sm">Selesai</button>
       </span>
     </div>
 
@@ -188,25 +309,32 @@
     <div id="stage">
       <div id="face" data-mood="netral" data-activity="idle" aria-hidden="true">
         <svg viewBox="0 0 200 170">
-          <text class="fire" x="100" y="20" text-anchor="middle" font-size="26">🔥🔥🔥</text>
-          <rect class="head" x="28" y="34" width="144" height="112" rx="42"/>
-          <g class="eyes eyes-open"><circle class="dot" cx="76" cy="84" r="8"/><circle class="dot" cx="124" cy="84" r="8"/></g>
-          <g class="eyes eyes-happy"><path class="ink" d="M66 88 q10 -13 20 0"/><path class="ink" d="M114 88 q10 -13 20 0"/></g>
-          <g class="brows"><path class="ink" d="M60 66 l26 9"/><path class="ink" d="M140 66 l-26 9"/></g>
-          <path class="mouth mouth-flat ink" d="M88 118 h24"/>
-          <path class="mouth mouth-smile ink" d="M80 110 q20 20 40 0"/>
+          <!-- kepala digambar sedikit tidak simetris, seperti coretan tangan -->
+          <path class="head" d="M58 38 C96 30 140 31 162 41 C176 62 178 110 167 137 C130 149 72 150 37 139 C26 112 25 66 39 43 Z"/>
+          <g class="eyes eyes-open"><circle class="dot" cx="77" cy="84" r="7.5"/><circle class="dot" cx="124" cy="84" r="7.5"/></g>
+          <g class="eyes eyes-happy"><path class="ink" d="M67 88 q10 -13 20 0"/><path class="ink" d="M114 88 q10 -13 20 0"/></g>
+          <g class="brows"><path class="pen" d="M60 64 l27 10"/><path class="pen" d="M141 64 l-27 10"/></g>
+          <path class="mouth mouth-flat ink" d="M88 118 h25"/>
+          <path class="mouth mouth-smile ink" d="M80 110 q21 20 42 0"/>
           <ellipse class="mouth mouth-o dot" cx="100" cy="121" rx="8" ry="11"/>
           <ellipse class="mouth mouth-talk dot" cx="100" cy="118" rx="13" ry="8"/>
-          <g class="thinking"><circle class="dot" cx="154" cy="30" r="4"/><circle class="dot" cx="166" cy="20" r="5"/><circle class="dot" cx="180" cy="8" r="6"/></g>
+          <!-- tanda kesal: urat ala komik, ditulis dengan pena merah -->
+          <g class="vein"><path class="pen" d="M160 18 q6 8 0 16"/><path class="pen" d="M176 18 q-6 8 0 16"/>
+                          <path class="pen" d="M156 30 q8 -6 16 0"/><path class="pen" d="M156 22 q8 6 16 0"/></g>
+          <!-- centang hijau saat jawaban benar -->
+          <path class="tick okmark" d="M152 26 l10 10 l20 -22"/>
+          <g class="thinking"><circle class="dot" cx="156" cy="30" r="4"/><circle class="dot" cx="168" cy="20" r="5"/><circle class="dot" cx="182" cy="8" r="6"/></g>
         </svg>
       </div>
-      <div id="stage-user" class="muted"></div>
-      <div id="stage-reply" class="bubble tutor"></div>
+      <div id="stage-user"></div>
+      <div id="stage-marks" class="marks" aria-label="Koreksi"></div>
+      <div id="stage-reply" class="bubble tutor" aria-live="polite"></div>
       <div id="stage-controls">
-        <div id="live" class="live"></div>
-        <button id="btn-ptt" title="Tahan untuk bicara" aria-label="Tahan untuk bicara">🎤</button>
-        <div class="muted small">Tahan tombol atau <b>spasi</b> untuk bicara, lepas untuk mengirim</div>
+        <div id="live" class="live" aria-live="polite"></div>
+        <button id="btn-ptt" aria-label="Tahan untuk bicara"></button>
+        <div class="hint">Tahan tombol atau <kbd>Spasi</kbd> sambil bicara. Lepas untuk mengirim.</div>
         <form id="stage-form" class="row">
+          <label class="sr-only" for="stage-input">Atau ketik jawabanmu</label>
           <input type="text" id="stage-input" placeholder="atau ketik di sini" autocomplete="off">
           <button type="submit">Kirim</button>
         </form>
@@ -214,11 +342,11 @@
     </div>
 
     <!-- Mode chat -->
-    <div id="messages" class="hidden"></div>
+    <div id="messages" class="hidden" aria-live="polite"></div>
 
-    <div id="stats" class="muted small"></div>
+    <div id="stats"></div>
     <details id="memory">
-      <summary>🧠 Yang diingat tentang kamu</summary>
+      <summary></summary>
       <div id="memory-body" class="small"></div>
     </details>
     <div id="recap"></div>
@@ -226,23 +354,41 @@
 </main>
 
 <div id="composer" class="hidden">
-  <div id="live2" class="live"></div>
+  <div id="live2" class="live" aria-live="polite"></div>
   <div class="inner">
-    <button id="btn-ptt2" class="secondary" title="Tahan untuk bicara">🎤</button>
-    <textarea id="input" placeholder="Tulis dalam bahasa Inggris... (Enter = kirim)"></textarea>
+    <button id="btn-ptt2" class="quiet" aria-label="Tahan untuk bicara"></button>
+    <label class="sr-only" for="input">Jawabanmu dalam bahasa Inggris</label>
+    <textarea id="input" placeholder="Tulis dalam bahasa Inggris. Enter untuk kirim."></textarea>
     <button id="btn-send">Kirim</button>
   </div>
 </div>
 
 <script>
 // =====================================================================
+// Ikon: SVG garis sederhana yang senada dengan wajah tutor (bukan emoji)
+// =====================================================================
+const svg = (body) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
+const ICON = {
+  mic: svg('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>'),
+  speakerOn: svg('<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10"/>'),
+  speakerOff: svg('<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M16 10l4.5 4.5M20.5 10L16 14.5"/>'),
+  chat: svg('<path d="M4 5.5h16v10.5H9.5L5 19.5V16H4z"/>'),
+  face: svg('<path d="M6 5h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><path d="M9.5 10.5v.5M14.5 10.5v.5M9.5 15h5"/>'),
+  notes: svg('<path d="M6 3.5h9l3.5 3.5v13.5H6z"/><path d="M9 10h6.5M9 13.5h6.5M9 17h3.5"/>'),
+  check: svg('<path d="M5 12.5l4.5 4.5L19 7"/>'),
+  warn: svg('<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.3"/>'),
+};
+
+// =====================================================================
 // State aplikasi: apa yang perlu diingat browser selama halaman terbuka
 // =====================================================================
-const state = { user: null, sessionId: null, sessionOpen: false, busy: false, screen: "login", header: "" };
+const state = { user: null, sessionId: null, sessionOpen: false, busy: false, screen: "login", header: "", lastUserBubble: null };
 const $ = (id) => document.getElementById(id);
 
 function load(key, fallback) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } }
 function save(key, value) { try { value === null ? localStorage.removeItem(key) : localStorage.setItem(key, value); } catch {} }
+
+function notice(id, text) { $(id).innerHTML = text ? `${ICON.warn}<span>${escapeHtml(text)}</span>` : ""; }
 
 // =====================================================================
 // api(): satu pintu untuk semua request ke server (mirip call_llm di Python)
@@ -281,7 +427,7 @@ function refreshLayout() {
   const composer = inChat && !voice && state.sessionOpen;
   $("composer").classList.toggle("hidden", !composer);
   document.body.classList.toggle("composer-open", composer);
-  $("btn-mode").textContent = voice ? "💬 Mode chat" : "🗣️ Mode suara";
+  $("btn-mode").innerHTML = voice ? `${ICON.chat}<span>Mode chat</span>` : `${ICON.face}<span>Mode suara</span>`;
   $("btn-end").disabled = !state.sessionOpen || state.busy;
 }
 
@@ -296,7 +442,7 @@ $("btn-mode").addEventListener("click", () => {
 // Markdown mini untuk balasan tutor (**tebal**, *miring*, daftar, kutipan).
 // Teks di-escape DULU agar HTML dari luar tidak pernah dijalankan (cegah XSS).
 // =====================================================================
-function escapeHtml(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function escapeHtml(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
 function inline(s) {
   return escapeHtml(s)
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
@@ -332,19 +478,20 @@ function markdown(src) {
 }
 
 // =====================================================================
-// Layar 1: Login
+// Layar 1: Masuk
 // =====================================================================
 async function login(username) {
   state.user = await api("/api/login", { username });
   save("username", state.user.username);
+  $("who").textContent = state.user.username;
   if (state.user.sudah_tes) await showHome(); else showPlacement();
 }
 
 $("login-form").addEventListener("submit", async (e) => {
   e.preventDefault();  // cegah form memuat ulang halaman
-  $("login-error").textContent = "";
+  notice("login-error", "");
   try { await login($("username").value.trim()); }
-  catch (err) { $("login-error").textContent = err.message; }
+  catch (err) { notice("login-error", err.message); }
 });
 
 // =====================================================================
@@ -354,7 +501,7 @@ function showPlacement() {
   $("placement-intro").classList.remove("hidden");
   $("placement-form").classList.add("hidden");
   $("placement-result").classList.add("hidden");
-  $("placement-error").textContent = "";
+  notice("placement-error", "");
   show("placement");
 }
 
@@ -362,38 +509,41 @@ $("btn-take-test").addEventListener("click", async () => {
   try {
     const questions = await api("/api/placement/questions");
     $("questions").innerHTML = questions.map((q) => `
-      <div class="question">
-        <strong>${q.no}. ${escapeHtml(q.soal)}</strong>
-        ${Object.entries(q.opsi).map(([letter, text]) => `
-          <label><input type="radio" name="q${q.no}" value="${letter}"> ${letter}) ${escapeHtml(text)}</label>
-        `).join("")}
-      </div>`).join("");
+      <fieldset class="question">
+        <legend>${q.no}. ${escapeHtml(q.soal)}</legend>
+        <div class="opts">${Object.entries(q.opsi).map(([letter, text]) => `
+          <label><input type="radio" name="q${q.no}" value="${letter}" required>
+                 <span class="letter">${letter}</span><span>${escapeHtml(text)}</span></label>
+        `).join("")}</div>
+      </fieldset>`).join("");
     $("placement-intro").classList.add("hidden");
     $("placement-form").classList.remove("hidden");
-  } catch (err) { $("placement-error").textContent = err.message; }
+    $("questions").querySelector("input")?.focus();
+  } catch (err) { notice("placement-error", err.message); }
 });
 
 $("placement-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const answers = [1, 2, 3, 4, 5].map((n) => document.querySelector(`input[name=q${n}]:checked`)?.value);
-  if (answers.includes(undefined)) { $("placement-error").textContent = "Jawab semua soal dulu."; return; }
+  if (answers.includes(undefined)) { notice("placement-error", "Masih ada soal yang belum dijawab."); return; }
   await submitPlacement(answers);
 });
 
 $("btn-skip-test").addEventListener("click", () => submitPlacement(null));
 
 async function submitPlacement(answers) {
-  $("placement-error").textContent = "";
+  notice("placement-error", "");
   try {
     const r = await api("/api/placement", { user_id: state.user.id, answers });
     state.user.level = r.level; state.user.sudah_tes = true;
     $("placement-result-text").textContent = r.skor === null
-      ? "Kamu mulai dari level pemula."
-      : `Skor kamu ${r.skor}/5. Level: ${r.level}.`;
+      ? "Oke, kita mulai dari level pemula."
+      : `Skor kamu ${r.skor}/5. Kamu masuk level ${r.level}.`;
     $("placement-intro").classList.add("hidden");
     $("placement-form").classList.add("hidden");
     $("placement-result").classList.remove("hidden");
-  } catch (err) { $("placement-error").textContent = err.message; }
+    $("btn-to-home").focus();
+  } catch (err) { notice("placement-error", err.message); }
 }
 
 $("btn-to-home").addEventListener("click", () => showHome());
@@ -404,15 +554,20 @@ $("btn-to-home").addEventListener("click", () => showHome());
 async function showHome() {
   stopSpeaking(); cancelPtt();
   state.user = await api("/api/login", { username: state.user.username });  // segarkan jumlah sesi hari ini
-  const u = state.user;
-  $("home-greeting").textContent = `Halo, ${u.username}!`;
-  $("home-info").textContent = `Level: ${u.level} · Sesi hari ini: ${u.sesi_hari_ini}/${u.batas_sesi}`;
-  $("btn-start").disabled = u.sesi_hari_ini >= u.batas_sesi;
-  $("home-error").textContent = u.sesi_hari_ini >= u.batas_sesi ? "Batas sesi hari ini sudah tercapai. Coba lagi besok." : "";
+  const u = state.user, full = u.sesi_hari_ini >= u.batas_sesi;
+  const boxes = Array.from({ length: u.batas_sesi }, (_, i) =>
+    i < u.sesi_hari_ini ? `<span class="used">${ICON.check}</span>` : "<span></span>").join("");
+  $("home-greeting").textContent = `Halo, ${u.username}.`;
+  $("home-info").innerHTML = `Level <strong>${escapeHtml(u.level)}</strong> · Sesi hari ini
+    <span class="quota" role="img" aria-label="${u.sesi_hari_ini} dari ${u.batas_sesi} sesi terpakai">${boxes}</span>`;
+  $("btn-start").disabled = full;
+  notice("home-error", full ? "Jatah 3 sesi hari ini sudah habis. Besok bisa lanjut lagi." : "");
   show("home");
 }
 
-$("btn-logout").addEventListener("click", () => { state.user = null; save("username", null); $("username").value = ""; show("login"); });
+$("btn-logout").addEventListener("click", () => {
+  state.user = null; save("username", null); $("username").value = ""; $("who").textContent = ""; show("login");
+});
 
 // =====================================================================
 // Wajah tutor: mood = hasil giliran terakhir (dari tool yang dipanggil agen),
@@ -421,7 +576,10 @@ $("btn-logout").addEventListener("click", () => { state.user = null; save("usern
 function setMood(mood) { $("face").dataset.mood = mood || "netral"; }
 function setActivity(activity) { $("face").dataset.activity = activity; }
 
-function liveText(text) { $("live").textContent = text; $("live2").textContent = text; }
+// kind: "" biasa · "rec" sedang merekam (titik merah) · "warn" peringatan
+function liveText(text, kind = "") {
+  for (const id of ["live", "live2"]) { $(id).textContent = text; $(id).className = `live ${kind}`; }
+}
 
 // =====================================================================
 // Suara keluar (TTS): balasan tutor dibacakan
@@ -516,15 +674,16 @@ function speak(text, hooks = {}) {
         if (token !== speakToken || second.started) return;
         setActivity("idle");
         const reason = second.failed || first.failed || "tidak ada suara";
-        liveText(`Suara tutor gagal diputar (${reason}). Cek volume dan output suara Windows, lalu klik 🔊 Putar ulang.`);
+        liveText(`Suara tutor gagal diputar (${reason}). Cek volume dan output suara Windows, lalu tekan Putar ulang.`, "warn");
       }, 4000);
     }, 4000);
   }, 150);
 }
 
 function renderTtsButton() {
-  $("btn-tts").textContent = ttsOn ? "🔊" : "🔇";
-  $("btn-tts").title = ttsOn ? "Suara tutor: nyala (klik untuk mematikan)" : "Suara tutor: mati (klik untuk menyalakan)";
+  $("btn-tts").innerHTML = ttsOn ? `${ICON.speakerOn}<span>Suara</span>` : `${ICON.speakerOff}<span>Bisu</span>`;
+  $("btn-tts").setAttribute("aria-pressed", String(ttsOn));
+  $("btn-tts").title = ttsOn ? "Suara tutor menyala. Tekan untuk membisukan." : "Suara tutor mati. Tekan untuk menyalakan.";
 }
 
 $("btn-tts").addEventListener("click", () => {
@@ -558,12 +717,18 @@ const MIC_ERRORS = {
              "(Brave, Opera, dan browser bawaan editor tidak didukung), dan pastikan internet/VPN tidak memblokir.",
 };
 
-function setPttUi(on) { for (const id of ["btn-ptt", "btn-ptt2"]) $(id).classList.toggle("listening", on); }
+function setPttUi(on) {
+  for (const id of ["btn-ptt", "btn-ptt2"]) {
+    $(id).classList.toggle("listening", on);
+    $(id).setAttribute("aria-pressed", String(on));
+  }
+}
 
 function setupMic() {
+  for (const id of ["btn-ptt", "btn-ptt2"]) $(id).innerHTML = ICON.mic;
   if (!Recognition) {
     for (const id of ["btn-ptt", "btn-ptt2"]) $(id).disabled = true;
-    liveText("Browser ini belum mendukung input suara. Gunakan Chrome atau Edge, atau ketik jawabanmu.");
+    liveText("Browser ini belum mendukung input suara. Pakai Chrome atau Edge, atau ketik jawabanmu.", "warn");
     return;
   }
   recognizer = new Recognition();
@@ -581,12 +746,12 @@ function setupMic() {
     let heard = "";
     for (const result of e.results) heard += result[0].transcript;  // [0] = tebakan terbaik
     heardText = (before + heard).trim();
-    liveText(`🎙️ ${heardText}`);
+    liveText(heardText, "rec");
   };
   recognizer.onerror = (e) => {
     if (e.error === "aborted") return;
     micError = true;   // error = jangan dinyalakan ulang otomatis (cegah loop tanpa akhir)
-    liveText(MIC_ERRORS[e.error] || `Input suara gagal (${e.error}).`);
+    liveText(MIC_ERRORS[e.error] || `Input suara gagal (${e.error}).`, "warn");
   };
   recognizer.onend = () => {
     listening = false;
@@ -603,7 +768,7 @@ function pttDown() {
   stopSpeaking();                    // jangan sampai suara tutor ikut terekam
   heardText = ""; sendOnEnd = false; micError = false;
   wantListening = true; pressedAt = performance.now();
-  setPttUi(true); setActivity("listening"); liveText("🎙️ Mendengarkan...");
+  setPttUi(true); setActivity("listening"); liveText("Mendengarkan...", "rec");
   try { recognizer.start(); } catch { /* sudah dalam proses menyala */ }
 }
 
@@ -627,7 +792,7 @@ function finishPtt() {
   if (!sendOnEnd || micError) { if (!state.busy) setActivity("idle"); sendOnEnd = false; return; }
   sendOnEnd = false;
   const text = heardText.trim();
-  if (!text) { setActivity("idle"); liveText("Tidak terdengar apa-apa. Coba lagi lebih dekat ke mikrofon."); return; }
+  if (!text) { setActivity("idle"); liveText("Tidak terdengar apa-apa. Coba lagi lebih dekat ke mikrofon.", "warn"); return; }
   liveText("");
   sendText(text, performance.now() - releasedAt);   // waktu "dengar" = dari tombol dilepas sampai teks final
 }
@@ -673,21 +838,58 @@ function addBubble(role, text, withReplay = true) {
   return div;
 }
 
+function addSystemNote(text) {
+  const div = document.createElement("div");
+  div.className = "system";
+  div.innerHTML = `${ICON.warn}<span>${escapeHtml(text)}</span>`;
+  $("messages").appendChild(div);
+}
+
 function replayButton(text) {
   const b = document.createElement("button");
   b.className = "replay";
-  b.textContent = "🔊 Putar ulang";
+  b.innerHTML = `${ICON.speakerOn}<span>Putar ulang</span>`;
   b.addEventListener("click", () => speak(text));
   return b;
 }
 
-function showStageReply(text, withReplay = true) {
+function showStageReply(text) {
   $("stage-reply").innerHTML = markdown(text);
-  if (withReplay && canSpeak) $("stage-reply").appendChild(replayButton(text));
+  if (canSpeak) $("stage-reply").appendChild(replayButton(text));
   $("stage-reply").scrollTop = 0;
 }
 
-function setBusy(busy, label = "Tutor sedang berpikir...") {
+// Coretan pena merah: kalimat asli dicoret, perbaikannya ditulis tangan. Data langsung dari tool save_mistake.
+// Agen kadang menyimpan 2 kesalahan dengan kalimat yang persis sama; tampilkan sekali saja.
+function uniqueMarks(list) {
+  const seen = new Set();
+  return list.filter((k) => {
+    const key = `${k.kalimat_asli}\u0000${k.kalimat_benar}`;
+    return seen.has(key) ? false : seen.add(key);
+  });
+}
+
+function marksHtml(list) {
+  return uniqueMarks(list).map((k) => `
+    <div class="mark">
+      <span class="sr-only">Salah:</span><span class="was">${escapeHtml(k.kalimat_asli)}</span>
+      <span class="sr-only">Benar:</span><span class="fix">${escapeHtml(k.kalimat_benar)}</span>
+      <span class="why">${escapeHtml(k.pola)} · ${escapeHtml(k.kategori.replace("_", " "))}</span>
+    </div>`).join("");
+}
+
+function showMarks(list) {
+  $("stage-marks").innerHTML = list?.length ? marksHtml(list) : "";
+  if (list?.length && state.lastUserBubble) {
+    const box = document.createElement("div");
+    box.className = "marks";
+    box.setAttribute("aria-label", "Koreksi");
+    box.innerHTML = marksHtml(list);
+    state.lastUserBubble.after(box);
+  }
+}
+
+function setBusy(busy, label = "Tutor sedang membaca jawabanmu...") {
   state.busy = busy;
   for (const id of ["btn-send", "input", "stage-input", "btn-ptt", "btn-ptt2"]) $(id).disabled = busy;
   if (!Recognition) for (const id of ["btn-ptt", "btn-ptt2"]) $(id).disabled = true;
@@ -726,35 +928,36 @@ function renderStats(listenMs, stats, voiceMs) {
   $("stats").textContent = parts.join(" · ");
 }
 
-// ---- Panel memori: memori jangka panjang agen yang tersimpan di database ----
+// ---- Catatan tutor: memori jangka panjang agen yang tersimpan di database ----
 async function loadMemory() {
   try {
     const m = await api(`/api/users/${state.user.id}/memory`);
     if (!m.progres.length && !m.kesalahan.length) {
-      $("memory-body").innerHTML = `<p class="muted">Belum ada. Tutor akan mulai mencatat pola dan kesalahanmu.</p>`;
+      $("memory-body").innerHTML = `<p class="muted" style="margin:var(--s3) 0 0">Masih kosong. Begitu kamu salah, tutor mencatatnya di sini, lalu melatihnya lagi di sesi berikutnya.</p>`;
       return;
     }
-    const pola = m.progres.map((p) => `<li>${escapeHtml(p.pola)}
-      <span class="chip ${p.sudah_dikuasai ? "ok" : ""}">${p.sudah_dikuasai ? "✅ dikuasai" : `salah ${p.jumlah_salah}x · streak ${p.streak_benar}/3`}</span></li>`).join("");
-    const salah = m.kesalahan.map((k) => `<li>"${escapeHtml(k.kalimat_asli)}" → <b>"${escapeHtml(k.kalimat_benar)}"</b>
-      <span class="muted">(${escapeHtml(k.pola)})</span></li>`).join("");
+    const pola = m.progres.map((p) => `<li>${escapeHtml(p.pola)}${p.sudah_dikuasai
+      ? `<span class="chip ok">${ICON.check}dikuasai</span>`
+      : `<span class="chip">salah ${p.jumlah_salah}× · streak ${p.streak_benar}/3</span>`}</li>`).join("");
+    const salah = uniqueMarks(m.kesalahan).map((k) => `<li class="mark"><span class="sr-only">Salah:</span><span class="was">${escapeHtml(k.kalimat_asli)}</span>
+      <span class="sr-only">Benar:</span><span class="fix">${escapeHtml(k.kalimat_benar)}</span></li>`).join("");
     $("memory-body").innerHTML =
-      (pola ? `<div><b>Pola yang sedang dilatih</b><ul>${pola}</ul></div>` : "") +
-      (salah ? `<div><b>Kesalahan terakhir</b><ul>${salah}</ul></div>` : "");
-  } catch { /* panel memori bersifat tambahan; abaikan bila gagal */ }
+      (pola ? `<h3>Pola yang sedang dilatih</h3><ul>${pola}</ul>` : "") +
+      (salah ? `<h3>Kesalahan terakhir</h3><ul>${salah}</ul>` : "");
+  } catch { /* catatan bersifat tambahan; abaikan bila gagal */ }
 }
 
 // ---- Satu pintu untuk semua balasan dari server ----
 function handleReply(r, listenMs) {
   updateInfo(r);
   setMood(r.mood);
+  showMarks(r.koreksi);
   if (r.reply) { addBubble("tutor", r.reply); showStageReply(r.reply); }
   renderStats(listenMs, r.stats, null);
+  setActivity("idle");   // selesai berpikir; berubah jadi "speaking" saat suara benar-benar mulai
   if (r.reply && ttsOn && canSpeak) {
     const t0 = performance.now();
     speak(r.reply, { onStart: () => renderStats(listenMs, r.stats, performance.now() - t0) });
-  } else {
-    setActivity("idle");
   }
   loadMemory();
   if (r.selesai) showRecap(r);
@@ -769,8 +972,8 @@ async function post(path, body, listenMs) {
   } catch (err) {
     setBusy(false);
     setActivity("idle"); setMood("netral");
-    addBubble("tutor", `⚠️ ${err.message}`, false);
-    showStageReply(`⚠️ ${err.message}`, false);
+    addSystemNote(err.message);
+    liveText(err.message, "warn");
   }
 }
 
@@ -778,8 +981,9 @@ function sendText(text, listenMs = null) {
   text = text.trim();
   if (!text || state.busy || !state.sessionOpen) return;
   stopSpeaking();
-  addBubble("user", text);
+  state.lastUserBubble = addBubble("user", text);
   $("stage-user").textContent = `“${text}”`;
+  $("stage-marks").innerHTML = "";
   post(`/api/sessions/${state.sessionId}/messages`, { user_id: state.user.id, text }, listenMs);
 }
 
@@ -791,16 +995,19 @@ $("stage-form").addEventListener("submit", (e) => { e.preventDefault(); sendText
 $("btn-end").addEventListener("click", () => {
   if (!state.sessionOpen || state.busy) return;
   cancelPtt(); stopSpeaking();
+  state.lastUserBubble = null;
+  $("stage-user").textContent = "";
   post(`/api/sessions/${state.sessionId}/end`, { user_id: state.user.id });
 });
 
 $("btn-start").addEventListener("click", async () => {
-  $("home-error").textContent = "";
-  for (const id of ["messages", "recap", "stage-user", "stage-reply", "stats", "chat-info-text"]) $(id).innerHTML = "";
+  notice("home-error", "");
+  for (const id of ["messages", "recap", "stage-user", "stage-marks", "stage-reply", "stats", "chat-info-text"]) $(id).innerHTML = "";
+  state.lastUserBubble = null;
   setMood("netral");
   state.sessionOpen = true;
   show("chat");
-  setBusy(true, "Planner sedang menyiapkan materi untukmu...");
+  setBusy(true, "Menyiapkan materi dari catatanmu...");
   try {
     const r = await api("/api/sessions", { user_id: state.user.id });
     state.sessionId = r.session_id;
@@ -810,7 +1017,7 @@ $("btn-start").addEventListener("click", async () => {
     state.sessionOpen = false;
     setBusy(false); setActivity("idle");
     show("home");
-    $("home-error").textContent = err.message;
+    notice("home-error", err.message);
   }
 });
 
@@ -819,23 +1026,26 @@ function showRecap(r) {
   cancelPtt();
   refreshLayout();
   const rows = (r.progres || []).map((p) => `
-    <tr><td>${escapeHtml(p.pola)}</td><td>${p.jumlah_salah}x</td>
-        <td>${p.sudah_dikuasai ? "✅ dikuasai" : `streak ${p.streak_benar}/3`}</td></tr>`).join("");
+    <tr><td>${escapeHtml(p.pola)}</td><td>${p.jumlah_salah}×</td>
+        <td>${p.sudah_dikuasai ? `<span class="chip ok" style="margin:0">${ICON.check}dikuasai</span>` : `streak ${p.streak_benar}/3`}</td></tr>`).join("");
   $("recap").innerHTML = `
-    <div class="card">
-      <h2>Rekap sesi</h2>
-      ${r.ringkasan ? `<div class="bubble tutor" style="max-width:100%">${markdown(r.ringkasan)}</div>` : ""}
-      <h2 style="margin-top:16px">Progres pola</h2>
-      ${rows ? `<table><tr><th>Pola</th><th>Salah</th><th>Status</th></tr>${rows}</table>` : `<p class="muted">Belum ada pola tercatat.</p>`}
-      <div class="row" style="margin-top:16px"><button id="btn-back">Kembali ke beranda</button></div>
+    <div class="sheet">
+      <h2 tabindex="-1" id="h-recap">Rekap sesi</h2>
+      ${r.ringkasan ? `<div class="summary">${markdown(r.ringkasan)}</div>` : ""}
+      <h2 style="margin-top:var(--s5); font-size:var(--t2)">Progres pola</h2>
+      ${rows ? `<table><thead><tr><th scope="col">Pola</th><th scope="col">Salah</th><th scope="col">Status</th></tr></thead><tbody>${rows}</tbody></table>`
+             : `<p class="muted">Belum ada pola yang tercatat di sesi ini.</p>`}
+      <div class="row" style="margin-top:var(--s5)"><button id="btn-back">Kembali ke beranda</button></div>
     </div>`;
   $("btn-back").addEventListener("click", () => showHome());
   $("recap").scrollIntoView({ behavior: "smooth", block: "start" });
+  $("h-recap").focus({ preventScroll: true });
 }
 
 // =====================================================================
 // Saat halaman dibuka: masuk otomatis jika username pernah disimpan
 // =====================================================================
+$("memory").querySelector("summary").innerHTML = `${ICON.notes}<span>Catatan tutor tentang kamu</span>`;
 setupMic();
 renderTtsButton();
 refreshLayout();
