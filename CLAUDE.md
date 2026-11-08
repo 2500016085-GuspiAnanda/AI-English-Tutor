@@ -33,6 +33,8 @@ Tujuan utama: portofolio belajar agentic AI (tool calling, memori, planner).
   rutinitas harian, hobi, arah & tempat, minta tolong.
 - Skenario menengah/lanjut: interview magang, presentasi kelas.
 - Tidak ada penilaian pelafalan di MVP; cukup tampilkan transkrip STT.
+- Web punya 2 mode: suara (wajah berekspresi + tahan tombol/spasi untuk bicara) dan chat.
+  Ekspresi wajah dari tool agen per giliran: save_mistake = marah, giliran pengguna tanpa salah = senang.
 - Batas 3 sesi/hari per pengguna. Login cukup username (tanpa password).
 
 ## Agen

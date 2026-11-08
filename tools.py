@@ -64,6 +64,26 @@ class SessionContext:
     correct: set[str] = field(default_factory=set)  # pola yang dipakai benar di sesi ini
     ended: bool = False
     ringkasan: str | None = None
+    # Catatan per giliran (direset oleh new_turn): dipakai web untuk ekspresi wajah & info kecepatan
+    turn_mistakes: int = 0
+    turn_correct: int = 0
+    turn_tools: list[str] = field(default_factory=list)
+    turn_llm_calls: int = 0
+
+    def new_turn(self) -> None:
+        self.turn_mistakes = self.turn_correct = self.turn_llm_calls = 0
+        self.turn_tools = []
+
+    def mood(self, user_turn: bool = False) -> str:
+        """Ekspresi tutor diambil dari keputusan agen sendiri (tool yang dipanggil), bukan ditebak dari teks.
+
+        user_turn=True: pengguna baru saja mengirim kalimat; tanpa save_mistake berarti kalimatnya benar.
+        """
+        if self.turn_mistakes:
+            return "marah"
+        if self.turn_correct or user_turn:
+            return "senang"
+        return "netral"
 
 
 def execute_tool(ctx: SessionContext, name: str, arguments: str) -> str:
@@ -83,6 +103,7 @@ def execute_tool(ctx: SessionContext, name: str, arguments: str) -> str:
         mid = db.insert_mistake(ctx.conn, ctx.user_id, ctx.session_id, args.kalimat_asli, args.kalimat_benar, args.kategori, args.pola)
         db.record_pattern_failure(ctx.conn, ctx.user_id, args.pola)
         ctx.failed.add(args.pola)
+        ctx.turn_mistakes += 1
         return _out(ok=True, mistake_id=mid)
 
     if isinstance(args, GetErrorLog):
@@ -93,6 +114,7 @@ def execute_tool(ctx: SessionContext, name: str, arguments: str) -> str:
     if isinstance(args, MarkProgress):
         if args.benar:
             ctx.correct.add(args.pola)  # streak baru dihitung di finalize_progress (sekali per sesi)
+            ctx.turn_correct += 1
         elif args.pola not in ctx.failed:
             db.record_pattern_failure(ctx.conn, ctx.user_id, args.pola)
             ctx.failed.add(args.pola)

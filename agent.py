@@ -96,6 +96,7 @@ def agent_step(ctx: SessionContext, messages: list[dict], debug: bool = False) -
     """Satu giliran agen: panggil LLM berulang selama ia meminta tool, kembalikan balasan teks akhirnya."""
     for _ in range(MAX_TOOL_ROUNDS):
         resp = call_llm(messages, TOOLS)
+        ctx.turn_llm_calls += 1
         msg = resp.choices[0].message
         usage = resp.usage
         messages.append(_assistant_dict(msg))
@@ -109,6 +110,7 @@ def agent_step(ctx: SessionContext, messages: list[dict], debug: bool = False) -
             return msg.content or ""
 
         for tc in msg.tool_calls:
+            ctx.turn_tools.append(tc.function.name)
             result = execute_tool(ctx, tc.function.name, tc.function.arguments)
             if debug:
                 print(f"   [tool] {tc.function.name}({tc.function.arguments}) -> {result}")

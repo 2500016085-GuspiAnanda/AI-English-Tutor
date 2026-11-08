@@ -18,8 +18,13 @@ dengan loop agen yang ditulis manual (tanpa LangChain/LangGraph/CrewAI) dan SQL 
 - **Persona dinamis**: tegas saat pengguna salah, santai saat benar. Bahasa penjelasan mengikuti level
   (pemula: Indonesia, menengah: campuran, lanjut: English).
 - **Pelacakan pola**: sebuah pola (mis. `simple past`) dianggap dikuasai setelah 3 sesi berturut-turut tanpa salah.
-- **Suara**: bicara lewat mikrofon (speech-to-text) dan balasan dibacakan (text-to-speech), keduanya
-  memakai Web Speech API bawaan browser, tanpa biaya API tambahan.
+- **Mode suara**: tahan tombol (atau spasi) untuk bicara, lepas untuk mengirim. Balasan dibacakan.
+  Speech-to-text dan text-to-speech memakai Web Speech API bawaan browser, tanpa biaya API tambahan.
+- **Wajah tutor berekspresi**: marah 🔥 saat kamu salah, senang saat benar. Ekspresi **tidak ditebak dari
+  teks**, melainkan diambil dari keputusan agen sendiri: giliran dengan `save_mistake` berarti marah.
+- **Panel "Yang diingat tentang kamu"**: menampilkan memori jangka panjang agen (pola, streak, kesalahan terakhir).
+- **Info kecepatan per giliran**: `dengar 0.4 s · agen 2.8 s (2× LLM, save_mistake ×2) · suara 0.2 s`,
+  sekaligus memperlihatkan berapa kali LLM dipanggil dan tool apa saja yang dipakai agen.
 - **Dua antarmuka, satu logika**: web (FastAPI + satu halaman HTML/JS) dan CLI.
 
 ## Arsitektur

@@ -10,14 +10,14 @@
     --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #667085;
     --line: #e4e7ec; --accent: #2f6fed; --accent-text: #ffffff;
     --tutor: #eef2f8; --user: #2f6fed; --user-text: #ffffff;
-    --bad: #c4320a; --good: #067647;
+    --bad: #d92d20; --good: #079455;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #12151c; --card: #1a1f29; --text: #e6e9ef; --muted: #98a2b3;
       --line: #2a3140; --accent: #5b8cff; --accent-text: #0b0e14;
       --tutor: #222a37; --user: #3b6fe0; --user-text: #ffffff;
-      --bad: #ff8a65; --good: #4cc38a;
+      --bad: #ff6b5b; --good: #4cc38a;
     }
   }
   * { box-sizing: border-box; }
@@ -27,6 +27,7 @@
   h1 { font-size: 1.4rem; margin: 0 0 4px; }
   h2 { font-size: 1.15rem; margin: 0 0 12px; }
   .muted { color: var(--muted); font-size: .9rem; }
+  .small { font-size: .82rem; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-top: 16px; }
   .hidden { display: none !important; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -37,6 +38,7 @@
     padding: 10px 16px; border: 0; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600;
     background: var(--accent); color: var(--accent-text); }
   button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  button.sm { padding: 6px 10px; font-size: .85rem; }
   button:disabled { opacity: .5; cursor: not-allowed; }
   .error { color: var(--bad); margin-top: 10px; min-height: 1.5em; }
 
@@ -45,9 +47,58 @@
   .question label { display: block; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
   .question label:hover { background: var(--tutor); }
 
-  /* ---------- Chat ---------- */
-  #chat-info { position: sticky; top: 0; background: var(--bg); padding: 8px 0; border-bottom: 1px solid var(--line); z-index: 1; }
-  #messages { display: flex; flex-direction: column; gap: 10px; padding: 16px 0 120px; }
+  /* ---------- Header sesi ---------- */
+  #chat-info { position: sticky; top: 0; background: var(--bg); padding: 8px 0; border-bottom: 1px solid var(--line);
+               z-index: 2; justify-content: space-between; }
+
+  /* ---------- Mode suara: panggung dengan wajah tutor ---------- */
+  #stage { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 16px 0 8px; }
+  #stage-user { min-height: 1.4em; font-style: italic; }
+  #stage-reply { max-width: 100%; text-align: left; max-height: 34vh; overflow-y: auto; }
+  #stage-reply:empty { display: none; }
+  #stage-controls { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+  #stage-form { width: 100%; flex-wrap: nowrap; }
+  .live { min-height: 1.4em; color: var(--muted); font-size: .9rem; }
+
+  /* Wajah: satu SVG, bagian-bagiannya ditampilkan/disembunyikan oleh data-mood & data-activity */
+  #face { width: 190px; position: relative; }
+  #face svg { width: 100%; height: auto; display: block; overflow: visible; }
+  #face .head { fill: var(--card); stroke: var(--accent); stroke-width: 6; transition: stroke .3s; }
+  #face .ink  { fill: none; stroke: var(--text); stroke-width: 6; stroke-linecap: round; }
+  #face .dot  { fill: var(--text); }
+  #face .mouth, #face .eyes, #face .brows, #face .fire, #face .thinking { display: none; }
+  #face::after { content: ""; position: absolute; left: 22%; right: 22%; bottom: -14px; height: 10px;
+                 border-radius: 50%; background: rgba(0,0,0,.18); filter: blur(4px); }
+  /* ekspresi (hasil giliran terakhir) */
+  #face[data-mood=netral] .eyes-open, #face[data-mood=netral] .mouth-flat  { display: inline; }
+  #face[data-mood=senang] .eyes-happy, #face[data-mood=senang] .mouth-smile { display: inline; }
+  #face[data-mood=senang] .head { stroke: var(--good); }
+  #face[data-mood=marah] .eyes-open, #face[data-mood=marah] .brows,
+  #face[data-mood=marah] .mouth-o, #face[data-mood=marah] .fire { display: inline; }
+  #face[data-mood=marah] .head { stroke: var(--bad); }
+  #face[data-mood=marah] svg { animation: shake .4s 2; }
+  /* aktivitas (sedang apa sekarang) */
+  #face[data-activity=listening] .head { stroke: var(--accent); animation: pulse 1s infinite; }
+  #face[data-activity=thinking] .thinking { display: inline; }
+  #face[data-activity=thinking] .eyes { transform: translateY(-5px); }
+  #face[data-activity=speaking] .mouth { display: none; }
+  #face[data-activity=speaking] .mouth-talk { display: inline; transform-box: fill-box; transform-origin: center;
+                                              animation: talk .28s infinite alternate; }
+  #face .thinking circle { animation: blink 1.2s infinite; }
+  #face .thinking circle:nth-child(2) { animation-delay: .2s; }
+  #face .thinking circle:nth-child(3) { animation-delay: .4s; }
+  @keyframes pulse { 50% { stroke-width: 11; } }
+  @keyframes talk { from { transform: scaleY(.25); } to { transform: scaleY(1); } }
+  @keyframes blink { 50% { opacity: .2; } }
+  @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+
+  /* Tombol tahan-untuk-bicara */
+  #btn-ptt { width: 76px; height: 76px; border-radius: 50%; font-size: 30px; padding: 0;
+             touch-action: none; user-select: none; -webkit-user-select: none; }
+  #btn-ptt.listening, #btn-ptt2.listening { background: var(--bad); color: #fff; border-color: var(--bad); transform: scale(1.08); }
+
+  /* ---------- Mode chat ---------- */
+  #messages { display: flex; flex-direction: column; gap: 10px; padding: 16px 0 24px; }
   .bubble { max-width: 85%; padding: 10px 14px; border-radius: 14px; overflow-wrap: anywhere; }
   .bubble p { margin: 0 0 8px; } .bubble p:last-child { margin-bottom: 0; }
   .bubble ul, .bubble ol { margin: 4px 0 8px; padding-left: 20px; }
@@ -56,16 +107,21 @@
   .tutor { align-self: flex-start; background: var(--tutor); border-bottom-left-radius: 4px; }
   .user  { align-self: flex-end; background: var(--user); color: var(--user-text); border-bottom-right-radius: 4px; white-space: pre-wrap; }
   .typing { align-self: flex-start; color: var(--muted); font-style: italic; }
+  .bubble .replay { display: block; margin-top: 6px; padding: 2px 8px; font-size: .8rem; font-weight: 500;
+                    background: transparent; color: var(--muted); border: 1px solid var(--line); }
   #composer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg); border-top: 1px solid var(--line); }
   #composer .inner { max-width: 720px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 8px; }
   #composer textarea { resize: none; height: 48px; }
-  /* ---------- Suara (M5) ---------- */
-  #composer button.icon { padding: 10px 12px; }
-  #btn-mic.listening { background: var(--bad); color: #fff; border-color: var(--bad); animation: pulse 1.2s infinite; }
-  @keyframes pulse { 50% { opacity: .55; } }
-  .voice-note { max-width: 720px; margin: 0 auto; padding: 8px 16px 0; font-size: .85rem; color: var(--muted); min-height: 1.4em; }
-  .bubble .replay { display: block; margin-top: 6px; padding: 2px 8px; font-size: .8rem; font-weight: 500;
-                    background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  #composer .live { max-width: 720px; margin: 0 auto; padding: 8px 16px 0; }
+  body.composer-open main { padding-bottom: 130px; }
+
+  /* ---------- Info kecepatan, memori, rekap ---------- */
+  #stats { text-align: center; min-height: 1.3em; }
+  #memory { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: var(--card); }
+  #memory summary { cursor: pointer; font-weight: 600; }
+  #memory ul { margin: 8px 0; padding-left: 18px; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .78rem; border: 1px solid var(--line); margin-left: 6px; }
+  .chip.ok { color: var(--good); border-color: var(--good); }
   table { width: 100%; border-collapse: collapse; font-size: .92rem; }
   th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
 </style>
@@ -117,21 +173,64 @@
     <div class="error" id="home-error"></div>
   </section>
 
-  <!-- ===== Layar 4: Chat ===== -->
+  <!-- ===== Layar 4: Sesi (mode suara / mode chat) ===== -->
   <section id="screen-chat" class="hidden">
-    <div id="chat-info" class="muted"></div>
-    <div id="messages"></div>
+    <div id="chat-info" class="row">
+      <span id="chat-info-text" class="muted"></span>
+      <span class="row">
+        <button id="btn-tts" class="secondary sm" title="Suara tutor nyala/mati">🔊</button>
+        <button id="btn-mode" class="secondary sm"></button>
+        <button id="btn-end" class="secondary sm" title="Akhiri sesi dan lihat rekap">Selesai</button>
+      </span>
+    </div>
+
+    <!-- Mode suara -->
+    <div id="stage">
+      <div id="face" data-mood="netral" data-activity="idle" aria-hidden="true">
+        <svg viewBox="0 0 200 170">
+          <text class="fire" x="100" y="20" text-anchor="middle" font-size="26">🔥🔥🔥</text>
+          <rect class="head" x="28" y="34" width="144" height="112" rx="42"/>
+          <g class="eyes eyes-open"><circle class="dot" cx="76" cy="84" r="8"/><circle class="dot" cx="124" cy="84" r="8"/></g>
+          <g class="eyes eyes-happy"><path class="ink" d="M66 88 q10 -13 20 0"/><path class="ink" d="M114 88 q10 -13 20 0"/></g>
+          <g class="brows"><path class="ink" d="M60 66 l26 9"/><path class="ink" d="M140 66 l-26 9"/></g>
+          <path class="mouth mouth-flat ink" d="M88 118 h24"/>
+          <path class="mouth mouth-smile ink" d="M80 110 q20 20 40 0"/>
+          <ellipse class="mouth mouth-o dot" cx="100" cy="121" rx="8" ry="11"/>
+          <ellipse class="mouth mouth-talk dot" cx="100" cy="118" rx="13" ry="8"/>
+          <g class="thinking"><circle class="dot" cx="154" cy="30" r="4"/><circle class="dot" cx="166" cy="20" r="5"/><circle class="dot" cx="180" cy="8" r="6"/></g>
+        </svg>
+      </div>
+      <div id="stage-user" class="muted"></div>
+      <div id="stage-reply" class="bubble tutor"></div>
+      <div id="stage-controls">
+        <div id="live" class="live"></div>
+        <button id="btn-ptt" title="Tahan untuk bicara" aria-label="Tahan untuk bicara">🎤</button>
+        <div class="muted small">Tahan tombol atau <b>spasi</b> untuk bicara, lepas untuk mengirim</div>
+        <form id="stage-form" class="row">
+          <input type="text" id="stage-input" placeholder="atau ketik di sini" autocomplete="off">
+          <button type="submit">Kirim</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Mode chat -->
+    <div id="messages" class="hidden"></div>
+
+    <div id="stats" class="muted small"></div>
+    <details id="memory">
+      <summary>🧠 Yang diingat tentang kamu</summary>
+      <div id="memory-body" class="small"></div>
+    </details>
+    <div id="recap"></div>
   </section>
 </main>
 
 <div id="composer" class="hidden">
-  <div id="voice-status" class="voice-note"></div>
+  <div id="live2" class="live"></div>
   <div class="inner">
-    <button id="btn-mic" class="secondary icon" title="Bicara dalam bahasa Inggris">🎤</button>
-    <textarea id="input" placeholder="Tulis atau tekan 🎤 untuk bicara... (Enter = kirim)"></textarea>
+    <button id="btn-ptt2" class="secondary" title="Tahan untuk bicara">🎤</button>
+    <textarea id="input" placeholder="Tulis dalam bahasa Inggris... (Enter = kirim)"></textarea>
     <button id="btn-send">Kirim</button>
-    <button id="btn-tts" class="secondary icon" title="Suara tutor: nyala/mati">🔊</button>
-    <button id="btn-end" class="secondary" title="Akhiri sesi dan lihat rekap">Selesai</button>
   </div>
 </div>
 
@@ -139,8 +238,11 @@
 // =====================================================================
 // State aplikasi: apa yang perlu diingat browser selama halaman terbuka
 // =====================================================================
-const state = { user: null, sessionId: null, busy: false };
+const state = { user: null, sessionId: null, sessionOpen: false, busy: false, screen: "login", header: "" };
 const $ = (id) => document.getElementById(id);
+
+function load(key, fallback) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } }
+function save(key, value) { try { value === null ? localStorage.removeItem(key) : localStorage.setItem(key, value); } catch {} }
 
 // =====================================================================
 // api(): satu pintu untuk semua request ke server (mirip call_llm di Python)
@@ -154,28 +256,47 @@ async function api(path, body) {
   const res = await fetch(path, options);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    // 422 dari Pydantic berupa daftar error; selain itu berupa teks
-    const d = data.detail;
+    const d = data.detail;   // 422 dari Pydantic berupa daftar error; selain itu berupa teks
     throw new Error(Array.isArray(d) ? d.map((e) => e.msg).join("; ") : d || `Error ${res.status}`);
   }
   return data;
 }
 
-// Tampilkan satu layar, sembunyikan yang lain
+// =====================================================================
+// Layar & mode tampilan
+// =====================================================================
+state.mode = load("mode", "suara");   // "suara" (wajah + tahan-untuk-bicara) atau "chat" (balon chat)
+
 function show(screen) {
+  state.screen = screen;
   for (const s of ["login", "placement", "home", "chat"]) $(`screen-${s}`).classList.toggle("hidden", s !== screen);
-  $("composer").classList.toggle("hidden", screen !== "chat");
+  refreshLayout();
 }
 
-// localStorage bisa diblokir browser (mode privat), jadi selalu dibungkus try/catch
-function remember(username) { try { username ? localStorage.setItem("username", username) : localStorage.removeItem("username"); } catch {} }
-function remembered() { try { return localStorage.getItem("username"); } catch { return null; } }
+function refreshLayout() {
+  const inChat = state.screen === "chat", voice = state.mode === "suara";
+  $("stage").classList.toggle("hidden", !voice);
+  $("messages").classList.toggle("hidden", voice);
+  $("stage-controls").classList.toggle("hidden", !state.sessionOpen);
+  const composer = inChat && !voice && state.sessionOpen;
+  $("composer").classList.toggle("hidden", !composer);
+  document.body.classList.toggle("composer-open", composer);
+  $("btn-mode").textContent = voice ? "💬 Mode chat" : "🗣️ Mode suara";
+  $("btn-end").disabled = !state.sessionOpen || state.busy;
+}
+
+$("btn-mode").addEventListener("click", () => {
+  state.mode = state.mode === "suara" ? "chat" : "suara";
+  save("mode", state.mode);
+  refreshLayout();
+  $("messages").lastElementChild?.scrollIntoView({ block: "end" });
+});
 
 // =====================================================================
 // Markdown mini untuk balasan tutor (**tebal**, *miring*, daftar, kutipan).
 // Teks di-escape DULU agar HTML dari luar tidak pernah dijalankan (cegah XSS).
 // =====================================================================
-function escapeHtml(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function escapeHtml(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 function inline(s) {
   return escapeHtml(s)
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
@@ -215,8 +336,8 @@ function markdown(src) {
 // =====================================================================
 async function login(username) {
   state.user = await api("/api/login", { username });
-  remember(state.user.username);
-  if (state.user.sudah_tes) showHome(); else showPlacement();
+  save("username", state.user.username);
+  if (state.user.sudah_tes) await showHome(); else showPlacement();
 }
 
 $("login-form").addEventListener("submit", async (e) => {
@@ -281,7 +402,7 @@ $("btn-to-home").addEventListener("click", () => showHome());
 // Layar 3: Beranda
 // =====================================================================
 async function showHome() {
-  stopSpeaking();
+  stopSpeaking(); cancelPtt();
   state.user = await api("/api/login", { username: state.user.username });  // segarkan jumlah sesi hari ini
   const u = state.user;
   $("home-greeting").textContent = `Halo, ${u.username}!`;
@@ -291,87 +412,22 @@ async function showHome() {
   show("home");
 }
 
-$("btn-logout").addEventListener("click", () => { state.user = null; remember(null); $("username").value = ""; show("login"); });
+$("btn-logout").addEventListener("click", () => { state.user = null; save("username", null); $("username").value = ""; show("login"); });
 
 // =====================================================================
-// Suara (M5): Web Speech API bawaan browser. Server tidak berubah sama sekali.
+// Wajah tutor: mood = hasil giliran terakhir (dari tool yang dipanggil agen),
+// activity = apa yang sedang terjadi sekarang (mendengar / berpikir / berbicara)
 // =====================================================================
+function setMood(mood) { $("face").dataset.mood = mood || "netral"; }
+function setActivity(activity) { $("face").dataset.activity = activity; }
 
-// ---- Speech-to-Text: suara pengguna -> teks di kotak input ----
-const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;  // Chrome/Edge pakai awalan webkit
-// wantListening = keinginan PENGGUNA (nyala sampai 🎤 ditekan lagi);
-// listening     = kondisi BROWSER saat ini (bisa berhenti sendiri walau pengguna belum selesai)
-let recognizer = null, wantListening = false, listening = false, micError = false;
+function liveText(text) { $("live").textContent = text; $("live2").textContent = text; }
 
-const MIC_ERRORS = {
-  "not-allowed": "Akses mikrofon ditolak. Klik ikon di kiri address bar, lalu izinkan mikrofon.",
-  "no-speech": "Tidak terdengar suara. Tekan 🎤 dan coba lagi.",
-  "audio-capture": "Mikrofon tidak ditemukan.",
-  "network": "Layanan pengenal suara tidak bisa dihubungi. Pakai Google Chrome atau Microsoft Edge asli " +
-             "(Brave, Opera, dan browser bawaan editor tidak didukung), dan pastikan internet/VPN tidak memblokir.",
-};
-
-function voiceStatus(text) { $("voice-status").textContent = text; }
-
-function setupMic() {
-  if (!Recognition) {
-    $("btn-mic").classList.add("hidden");
-    voiceStatus("Browser ini belum mendukung input suara. Gunakan Chrome atau Edge.");
-    return;
-  }
-  recognizer = new Recognition();
-  recognizer.lang = "en-US";          // yang dilatih adalah bahasa Inggris
-  recognizer.interimResults = true;   // teks muncul bertahap selagi pengguna bicara
-  recognizer.continuous = true;       // tetap mendengar walau pengguna jeda untuk berpikir
-  let before = "";                    // teks yang sudah ada di kotak input sebelum bicara
-
-  recognizer.onstart = () => {
-    listening = true; micError = false;
-    if (!wantListening) { recognizer.stop(); return; }  // pengguna menekan berhenti saat mic sedang menyala ulang
-    before = $("input").value.trim() ? $("input").value.trimEnd() + " " : "";
-    $("btn-mic").classList.add("listening");
-    voiceStatus("Mendengarkan... bicara dalam bahasa Inggris. Tekan 🎤 lagi untuk berhenti.");
-  };
-  recognizer.onresult = (e) => {
-    let heard = "";
-    for (const result of e.results) heard += result[0].transcript;  // [0] = tebakan terbaik
-    $("input").value = before + heard;
-  };
-  recognizer.onerror = (e) => {
-    if (e.error === "aborted") return;
-    micError = true;   // error = jangan dinyalakan ulang otomatis (cegah loop tanpa akhir)
-    voiceStatus(MIC_ERRORS[e.error] || `Input suara gagal (${e.error}).`);
-  };
-  recognizer.onend = () => {
-    listening = false;
-    // Chrome menghentikan mikrofon sendiri setelah beberapa saat walau mode continuous.
-    // Jika pengguna belum menekan 🎤 lagi, langsung nyalakan ulang; teks lama tetap tersimpan
-    // karena onstart mengambil isi kotak input sebagai awalan.
-    if (wantListening && !micError) {
-      try { recognizer.start(); return; } catch { /* gagal menyala ulang: anggap selesai */ }
-    }
-    wantListening = false;
-    $("btn-mic").classList.remove("listening");
-    if (!micError) voiceStatus($("input").value.trim() ? "Periksa transkrip di atas, perbaiki jika perlu, lalu tekan Kirim." : "");
-  };
-}
-
-$("btn-mic").addEventListener("click", () => {
-  if (!recognizer || state.busy) return;
-  if (wantListening) { stopMic(); return; }
-  wantListening = true;
-  stopSpeaking();        // jangan sampai suara tutor ikut terekam
-  try { recognizer.start(); } catch { /* sudah dalam proses menyala */ }
-});
-
-function stopMic() {
-  wantListening = false;
-  if (listening) recognizer.stop();   // onend akan merapikan tombol dan status
-}
-
-// ---- Text-to-Speech: balasan tutor dibacakan ----
+// =====================================================================
+// Suara keluar (TTS): balasan tutor dibacakan
+// =====================================================================
 const canSpeak = "speechSynthesis" in window;
-let ttsOn = (() => { try { return localStorage.getItem("tts") !== "off"; } catch { return true; } })();
+let ttsOn = load("tts", "on") !== "off";
 let voices = [];
 
 // Kata umum bahasa Indonesia untuk menebak bahasa tiap kalimat (balasan pemula bercampur dua bahasa)
@@ -409,47 +465,58 @@ function stopSpeaking() {
 
 // Dibacakan per kalimat: bahasa bisa berganti, dan Chrome kadang memotong ucapan yang terlalu panjang.
 // useChosenVoice=false -> biarkan browser memilih suara sendiri (dipakai saat percobaan kedua).
-function speakSentences(sentences, token, useChosenVoice) {
+function speakSentences(sentences, token, useChosenVoice, hooks) {
   const attempt = { started: false, failed: null };
   speechSynthesis.resume();   // pulihkan mesin suara yang "macet" dalam keadaan pause (bug Chrome/Edge)
-  for (const sentence of sentences) {
+  sentences.forEach((sentence, i) => {
     const u = new SpeechSynthesisUtterance(sentence);
     u.lang = guessLang(sentence);
     const voice = useChosenVoice ? voiceFor(u.lang) : null;
     if (voice) u.voice = voice;
     u.rate = u.lang === "en-US" ? 0.95 : 1;   // bahasa Inggris sedikit diperlambat agar mudah ditangkap
-    u.onstart = () => { attempt.started = true; };
+    u.onstart = () => {
+      if (token !== speakToken || attempt.started) return;
+      attempt.started = true;
+      hooks.onStart?.();
+    };
+    if (i === sentences.length - 1) u.onend = () => { if (token === speakToken) hooks.onEnd?.(); };
     u.onerror = (e) => {
       if (["interrupted", "canceled"].includes(e.error) || token !== speakToken) return;  // dibatalkan sengaja
       attempt.failed ??= e.error;
       console.warn("TTS error:", e.error, voice?.name || "(suara bawaan)", sentence);
     };
     speechSynthesis.speak(u);
-  }
+  });
   return attempt;
 }
 
-function speak(text) {
+// hooks.onStart: dipanggil saat suara benar-benar mulai (untuk info kecepatan)
+function speak(text, hooks = {}) {
   if (!canSpeak) return;
   stopSpeaking();
   const token = speakToken;
   const sentences = toSentences(text);
   if (!sentences.length) return;
+  const wrapped = {
+    onStart: () => { setActivity("speaking"); hooks.onStart?.(); },
+    onEnd: () => setActivity("idle"),
+  };
 
   // Jeda singkat setelah cancel(): Chrome/Edge kadang membuang ucapan yang langsung dikirim setelahnya
   setTimeout(() => {
     if (token !== speakToken) return;
-    const first = speakSentences(sentences, token, true);
+    const first = speakSentences(sentences, token, true, wrapped);
 
     // Pengaman: 4 detik tanpa suara -> ulangi dengan suara bawaan browser; gagal lagi -> beri tahu pengguna
     setTimeout(() => {
       if (token !== speakToken || first.started) return;
       speechSynthesis.cancel();
-      const second = speakSentences(sentences, token, false);
+      const second = speakSentences(sentences, token, false, wrapped);
       setTimeout(() => {
         if (token !== speakToken || second.started) return;
+        setActivity("idle");
         const reason = second.failed || first.failed || "tidak ada suara";
-        voiceStatus(`Suara tutor gagal diputar (${reason}). Cek volume dan output suara Windows, lalu klik 🔊 Putar ulang.`);
+        liveText(`Suara tutor gagal diputar (${reason}). Cek volume dan output suara Windows, lalu klik 🔊 Putar ulang.`);
       }, 4000);
     }, 4000);
   }, 150);
@@ -462,8 +529,8 @@ function renderTtsButton() {
 
 $("btn-tts").addEventListener("click", () => {
   ttsOn = !ttsOn;
-  try { localStorage.setItem("tts", ttsOn ? "on" : "off"); } catch {}
-  if (!ttsOn) stopSpeaking();
+  save("tts", ttsOn ? "on" : "off");
+  if (!ttsOn) { stopSpeaking(); setActivity("idle"); }
   renderTtsButton();
 });
 
@@ -475,114 +542,295 @@ if (canSpeak) {
 }
 
 // =====================================================================
-// Layar 4: Chat
+// Suara masuk (STT): TAHAN tombol / spasi untuk bicara, LEPAS untuk mengirim
 // =====================================================================
-function addBubble(role, text, voice = true) {
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;  // Chrome/Edge pakai awalan webkit
+// wantListening = keinginan PENGGUNA (tombol sedang ditahan);
+// listening     = kondisi BROWSER (bisa berhenti sendiri walau tombol masih ditahan)
+let recognizer = null, wantListening = false, listening = false, micError = false;
+let heardText = "", sendOnEnd = false, pressedAt = 0, releasedAt = 0;
+
+const MIC_ERRORS = {
+  "not-allowed": "Akses mikrofon ditolak. Klik ikon di kiri address bar, lalu izinkan mikrofon.",
+  "no-speech": "Tidak terdengar suara. Tahan tombol sambil bicara, lalu lepas.",
+  "audio-capture": "Mikrofon tidak ditemukan.",
+  "network": "Layanan pengenal suara tidak bisa dihubungi. Pakai Google Chrome atau Microsoft Edge asli " +
+             "(Brave, Opera, dan browser bawaan editor tidak didukung), dan pastikan internet/VPN tidak memblokir.",
+};
+
+function setPttUi(on) { for (const id of ["btn-ptt", "btn-ptt2"]) $(id).classList.toggle("listening", on); }
+
+function setupMic() {
+  if (!Recognition) {
+    for (const id of ["btn-ptt", "btn-ptt2"]) $(id).disabled = true;
+    liveText("Browser ini belum mendukung input suara. Gunakan Chrome atau Edge, atau ketik jawabanmu.");
+    return;
+  }
+  recognizer = new Recognition();
+  recognizer.lang = "en-US";          // yang dilatih adalah bahasa Inggris
+  recognizer.interimResults = true;   // teks muncul bertahap selagi pengguna bicara
+  recognizer.continuous = true;       // tetap mendengar walau pengguna jeda untuk berpikir
+  let before = "";                    // teks dari potongan sebelumnya (bila mic menyala ulang)
+
+  recognizer.onstart = () => {
+    listening = true;
+    if (!wantListening) { recognizer.stop(); return; }  // tombol sudah dilepas sebelum mic sempat menyala
+    before = heardText ? heardText + " " : "";
+  };
+  recognizer.onresult = (e) => {
+    let heard = "";
+    for (const result of e.results) heard += result[0].transcript;  // [0] = tebakan terbaik
+    heardText = (before + heard).trim();
+    liveText(`🎙️ ${heardText}`);
+  };
+  recognizer.onerror = (e) => {
+    if (e.error === "aborted") return;
+    micError = true;   // error = jangan dinyalakan ulang otomatis (cegah loop tanpa akhir)
+    liveText(MIC_ERRORS[e.error] || `Input suara gagal (${e.error}).`);
+  };
+  recognizer.onend = () => {
+    listening = false;
+    // Chrome bisa menghentikan mic sendiri walau tombol masih ditahan: nyalakan ulang, teks lama disimpan
+    if (wantListening && !micError) {
+      try { recognizer.start(); return; } catch { /* gagal menyala ulang: anggap selesai */ }
+    }
+    finishPtt();
+  };
+}
+
+function pttDown() {
+  if (!recognizer || state.busy || !state.sessionOpen || wantListening) return;
+  stopSpeaking();                    // jangan sampai suara tutor ikut terekam
+  heardText = ""; sendOnEnd = false; micError = false;
+  wantListening = true; pressedAt = performance.now();
+  setPttUi(true); setActivity("listening"); liveText("🎙️ Mendengarkan...");
+  try { recognizer.start(); } catch { /* sudah dalam proses menyala */ }
+}
+
+function pttUp() {
+  if (!wantListening) return;
+  wantListening = false; releasedAt = performance.now();
+  if (releasedAt - pressedAt < 350) {          // cuma diketuk, bukan ditahan
+    sendOnEnd = false;
+    liveText("Tahan tombolnya selama kamu bicara, lalu lepas untuk mengirim.");
+    if (listening) recognizer.abort(); else finishPtt();
+    return;
+  }
+  sendOnEnd = true;
+  if (listening) recognizer.stop(); else finishPtt();   // stop() -> hasil akhir dikirim -> onend -> finishPtt
+}
+
+function cancelPtt() { wantListening = false; sendOnEnd = false; if (listening) recognizer?.abort(); setPttUi(false); }
+
+function finishPtt() {
+  setPttUi(false);
+  if (!sendOnEnd || micError) { if (!state.busy) setActivity("idle"); sendOnEnd = false; return; }
+  sendOnEnd = false;
+  const text = heardText.trim();
+  if (!text) { setActivity("idle"); liveText("Tidak terdengar apa-apa. Coba lagi lebih dekat ke mikrofon."); return; }
+  liveText("");
+  sendText(text, performance.now() - releasedAt);   // waktu "dengar" = dari tombol dilepas sampai teks final
+}
+
+function bindPtt(btn) {
+  btn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    try { btn.setPointerCapture(e.pointerId); } catch { /* pointerup tetap diterima walau jari bergeser */ }
+    pttDown();
+  });
+  btn.addEventListener("pointerup", pttUp);
+  btn.addEventListener("pointercancel", pttUp);
+  btn.addEventListener("contextmenu", (e) => e.preventDefault());   // tahan lama di HP tidak membuka menu
+}
+bindPtt($("btn-ptt"));
+bindPtt($("btn-ptt2"));
+
+// Spasi = tombol bicara, kecuali sedang mengetik di kotak teks
+const isTyping = (el) => el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
+document.addEventListener("keydown", (e) => {
+  if (e.code !== "Space" || state.screen !== "chat" || isTyping(e.target)) return;
+  e.preventDefault();
+  if (!e.repeat) pttDown();
+});
+document.addEventListener("keyup", (e) => {
+  if (e.code !== "Space" || !wantListening) return;
+  e.preventDefault();
+  pttUp();
+});
+window.addEventListener("blur", pttUp);   // pindah jendela saat menahan spasi -> anggap dilepas
+
+// =====================================================================
+// Layar 4: Sesi
+// =====================================================================
+function addBubble(role, text, withReplay = true) {
   const div = document.createElement("div");
   div.className = `bubble ${role}`;
   if (role === "tutor") div.innerHTML = markdown(text);  // aman: markdown() meng-escape dulu
   else div.textContent = text;                           // teks pengguna tidak pernah jadi HTML
-  if (role === "tutor" && voice && canSpeak) {
-    const replay = document.createElement("button");
-    replay.className = "replay";
-    replay.textContent = "🔊 Putar ulang";
-    replay.addEventListener("click", () => speak(text));
-    div.appendChild(replay);
-    if (ttsOn) speak(text);
-  }
+  if (role === "tutor" && withReplay && canSpeak) div.appendChild(replayButton(text));
   $("messages").appendChild(div);
-  div.scrollIntoView({ behavior: "smooth", block: "end" });
+  if (state.mode === "chat") div.scrollIntoView({ behavior: "smooth", block: "end" });
   return div;
 }
 
-function setBusy(busy, label = "Tutor sedang mengetik...") {
+function replayButton(text) {
+  const b = document.createElement("button");
+  b.className = "replay";
+  b.textContent = "🔊 Putar ulang";
+  b.addEventListener("click", () => speak(text));
+  return b;
+}
+
+function showStageReply(text, withReplay = true) {
+  $("stage-reply").innerHTML = markdown(text);
+  if (withReplay && canSpeak) $("stage-reply").appendChild(replayButton(text));
+  $("stage-reply").scrollTop = 0;
+}
+
+function setBusy(busy, label = "Tutor sedang berpikir...") {
   state.busy = busy;
-  $("btn-send").disabled = $("btn-end").disabled = $("input").disabled = busy;
+  for (const id of ["btn-send", "input", "stage-input", "btn-ptt", "btn-ptt2"]) $(id).disabled = busy;
+  if (!Recognition) for (const id of ["btn-ptt", "btn-ptt2"]) $(id).disabled = true;
   $("typing")?.remove();
   if (busy) {
+    setActivity("thinking");
+    liveText(label);
     const t = document.createElement("div");
     t.id = "typing"; t.className = "typing"; t.textContent = label;
     $("messages").appendChild(t);
-    t.scrollIntoView({ block: "end" });
   } else {
-    $("input").focus();
+    liveText("");
   }
+  refreshLayout();
 }
 
 function updateInfo(r) {
-  const materi = r.topik ? `Topik: ${r.topik}` : `Skenario: ${r.skenario}`;
-  if (r.topik !== undefined) state.header = `${materi} · Fokus: ${r.fokus_pola.join(", ")}`;
-  $("chat-info").textContent = `${state.header} · Giliran ${r.turn}/${r.max_turns}`;
+  if (r.topik !== undefined) {
+    const materi = r.topik ? `Topik: ${r.topik}` : `Skenario: ${r.skenario}`;
+    state.header = `${materi} · Fokus: ${r.fokus_pola.join(", ")}`;
+  }
+  $("chat-info-text").textContent = `${state.header} · Giliran ${r.turn}/${r.max_turns}`;
 }
+
+// ---- Info kecepatan: dengar (STT) · agen (server: LLM + tool) · suara (TTS mulai berbunyi) ----
+function sec(ms) { return `${(ms / 1000).toFixed(1)} s`; }
+function renderStats(listenMs, stats, voiceMs) {
+  if (!stats) return;
+  const counts = {};
+  for (const t of stats.tools) counts[t] = (counts[t] || 0) + 1;
+  const tools = Object.entries(counts).map(([t, n]) => (n > 1 ? `${t} ×${n}` : t)).join(", ");
+  const parts = [];
+  if (listenMs != null) parts.push(`dengar ${sec(listenMs)}`);
+  parts.push(`agen ${sec(stats.server_ms)} (${stats.llm_calls}× LLM${tools ? ", " + tools : ""})`);
+  parts.push(voiceMs != null ? `suara ${sec(voiceMs)}` : ttsOn && canSpeak ? "suara …" : "suara mati");
+  $("stats").textContent = parts.join(" · ");
+}
+
+// ---- Panel memori: memori jangka panjang agen yang tersimpan di database ----
+async function loadMemory() {
+  try {
+    const m = await api(`/api/users/${state.user.id}/memory`);
+    if (!m.progres.length && !m.kesalahan.length) {
+      $("memory-body").innerHTML = `<p class="muted">Belum ada. Tutor akan mulai mencatat pola dan kesalahanmu.</p>`;
+      return;
+    }
+    const pola = m.progres.map((p) => `<li>${escapeHtml(p.pola)}
+      <span class="chip ${p.sudah_dikuasai ? "ok" : ""}">${p.sudah_dikuasai ? "✅ dikuasai" : `salah ${p.jumlah_salah}x · streak ${p.streak_benar}/3`}</span></li>`).join("");
+    const salah = m.kesalahan.map((k) => `<li>"${escapeHtml(k.kalimat_asli)}" → <b>"${escapeHtml(k.kalimat_benar)}"</b>
+      <span class="muted">(${escapeHtml(k.pola)})</span></li>`).join("");
+    $("memory-body").innerHTML =
+      (pola ? `<div><b>Pola yang sedang dilatih</b><ul>${pola}</ul></div>` : "") +
+      (salah ? `<div><b>Kesalahan terakhir</b><ul>${salah}</ul></div>` : "");
+  } catch { /* panel memori bersifat tambahan; abaikan bila gagal */ }
+}
+
+// ---- Satu pintu untuk semua balasan dari server ----
+function handleReply(r, listenMs) {
+  updateInfo(r);
+  setMood(r.mood);
+  if (r.reply) { addBubble("tutor", r.reply); showStageReply(r.reply); }
+  renderStats(listenMs, r.stats, null);
+  if (r.reply && ttsOn && canSpeak) {
+    const t0 = performance.now();
+    speak(r.reply, { onStart: () => renderStats(listenMs, r.stats, performance.now() - t0) });
+  } else {
+    setActivity("idle");
+  }
+  loadMemory();
+  if (r.selesai) showRecap(r);
+}
+
+async function post(path, body, listenMs) {
+  setBusy(true);
+  try {
+    const r = await api(path, body);
+    setBusy(false);
+    handleReply(r, listenMs);
+  } catch (err) {
+    setBusy(false);
+    setActivity("idle"); setMood("netral");
+    addBubble("tutor", `⚠️ ${err.message}`, false);
+    showStageReply(`⚠️ ${err.message}`, false);
+  }
+}
+
+function sendText(text, listenMs = null) {
+  text = text.trim();
+  if (!text || state.busy || !state.sessionOpen) return;
+  stopSpeaking();
+  addBubble("user", text);
+  $("stage-user").textContent = `“${text}”`;
+  post(`/api/sessions/${state.sessionId}/messages`, { user_id: state.user.id, text }, listenMs);
+}
+
+$("btn-send").addEventListener("click", () => { sendText($("input").value); $("input").value = ""; });
+$("input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText($("input").value); $("input").value = ""; }
+});
+$("stage-form").addEventListener("submit", (e) => { e.preventDefault(); sendText($("stage-input").value); $("stage-input").value = ""; });
+$("btn-end").addEventListener("click", () => {
+  if (!state.sessionOpen || state.busy) return;
+  cancelPtt(); stopSpeaking();
+  post(`/api/sessions/${state.sessionId}/end`, { user_id: state.user.id });
+});
 
 $("btn-start").addEventListener("click", async () => {
   $("home-error").textContent = "";
-  $("messages").innerHTML = "";
-  $("chat-info").textContent = "";
+  for (const id of ["messages", "recap", "stage-user", "stage-reply", "stats", "chat-info-text"]) $(id).innerHTML = "";
+  setMood("netral");
+  state.sessionOpen = true;
   show("chat");
   setBusy(true, "Planner sedang menyiapkan materi untukmu...");
   try {
     const r = await api("/api/sessions", { user_id: state.user.id });
     state.sessionId = r.session_id;
     setBusy(false);
-    updateInfo(r);
-    addBubble("tutor", r.reply);
+    handleReply(r, null);
   } catch (err) {
-    setBusy(false);
+    state.sessionOpen = false;
+    setBusy(false); setActivity("idle");
     show("home");
     $("home-error").textContent = err.message;
   }
 });
 
-async function send(path, body, userText) {
-  if (state.busy) return;
-  if (userText) addBubble("user", userText);
-  setBusy(true);
-  try {
-    const r = await api(path, body);
-    setBusy(false);
-    if (r.reply) addBubble("tutor", r.reply);
-    updateInfo(r);
-    if (r.selesai) showRecap(r);
-  } catch (err) {
-    setBusy(false);
-    addBubble("tutor", `⚠️ ${err.message}`, false);
-  }
-}
-
-function sendMessage() {
-  const text = $("input").value.trim();
-  if (!text) return;
-  if (wantListening) stopMic();
-  stopSpeaking();
-  voiceStatus("");
-  $("input").value = "";
-  send(`/api/sessions/${state.sessionId}/messages`, { user_id: state.user.id, text }, text);
-}
-
-$("btn-send").addEventListener("click", sendMessage);
-$("input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }  // Shift+Enter = baris baru
-});
-$("btn-end").addEventListener("click", () =>
-  send(`/api/sessions/${state.sessionId}/end`, { user_id: state.user.id }));
-
 function showRecap(r) {
-  $("composer").classList.add("hidden");
+  state.sessionOpen = false;
+  cancelPtt();
+  refreshLayout();
   const rows = (r.progres || []).map((p) => `
     <tr><td>${escapeHtml(p.pola)}</td><td>${p.jumlah_salah}x</td>
         <td>${p.sudah_dikuasai ? "✅ dikuasai" : `streak ${p.streak_benar}/3`}</td></tr>`).join("");
-  const card = document.createElement("div");
-  card.className = "card";
-  card.innerHTML = `
-    <h2>Rekap sesi</h2>
-    ${r.ringkasan ? `<div class="bubble tutor" style="max-width:100%">${markdown(r.ringkasan)}</div>` : ""}
-    <h2 style="margin-top:16px">Progres pola</h2>
-    ${rows ? `<table><tr><th>Pola</th><th>Salah</th><th>Status</th></tr>${rows}</table>` : `<p class="muted">Belum ada pola tercatat.</p>`}
-    <div class="row" style="margin-top:16px"><button id="btn-back">Kembali ke beranda</button></div>`;
-  $("messages").appendChild(card);
-  card.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("recap").innerHTML = `
+    <div class="card">
+      <h2>Rekap sesi</h2>
+      ${r.ringkasan ? `<div class="bubble tutor" style="max-width:100%">${markdown(r.ringkasan)}</div>` : ""}
+      <h2 style="margin-top:16px">Progres pola</h2>
+      ${rows ? `<table><tr><th>Pola</th><th>Salah</th><th>Status</th></tr>${rows}</table>` : `<p class="muted">Belum ada pola tercatat.</p>`}
+      <div class="row" style="margin-top:16px"><button id="btn-back">Kembali ke beranda</button></div>
+    </div>`;
   $("btn-back").addEventListener("click", () => showHome());
+  $("recap").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // =====================================================================
@@ -590,7 +838,8 @@ function showRecap(r) {
 // =====================================================================
 setupMic();
 renderTtsButton();
-const saved = remembered();
+refreshLayout();
+const saved = load("username", null);
 if (saved) login(saved).catch(() => show("login")); else show("login");
 </script>
 </body>

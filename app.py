@@ -4,6 +4,7 @@ Jalankan  : uv run uvicorn app:app --reload
 Coba API  : buka http://127.0.0.1:8000/docs
 """
 
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Literal
@@ -80,23 +81,38 @@ def _chat_or_error(session_id: int, user_id: int) -> ChatState:
     return state
 
 
-def _run(state: ChatState, fn, *args) -> str:
-    """Pinjam koneksi DB selama agen bekerja, dan tolak pesan kedua selagi pesan pertama diproses."""
+def _run(state: ChatState, fn, *args) -> tuple[str, int]:
+    """Pinjam koneksi DB selama agen bekerja, dan tolak pesan kedua selagi pesan pertama diproses.
+
+    Kembalikan (balasan, lama_proses_ms).
+    """
     if not state.lock.acquire(blocking=False):
         raise HTTPException(409, "pesan sebelumnya masih diproses")
     try:
         with pool.connection() as conn:
             state.ctx.conn = conn
+            state.ctx.new_turn()
+            t0 = time.perf_counter()
             try:
-                return fn(state, *args)
+                return fn(state, *args), _ms_since(t0)
             finally:
                 state.ctx.conn = None  # koneksi kembali ke pool
     finally:
         state.lock.release()
 
 
-def _chat_response(session_id: int, state: ChatState, reply: str) -> dict:
-    out = {"reply": reply, "turn": state.turn, "max_turns": MAX_TURNS, "selesai": state.closed}
+def _ms_since(t0: float) -> int:
+    return round((time.perf_counter() - t0) * 1000)
+
+
+def _chat_response(session_id: int, state: ChatState, reply: str, server_ms: int, user_turn: bool = False) -> dict:
+    ctx = state.ctx
+    out = {
+        "reply": reply, "turn": state.turn, "max_turns": MAX_TURNS, "selesai": state.closed,
+        "mood": ctx.mood(user_turn and not state.closed),
+        # Info kecepatan & jejak agen untuk giliran ini
+        "stats": {"server_ms": server_ms, "llm_calls": ctx.turn_llm_calls, "tools": ctx.turn_tools},
+    }
     if state.closed:
         CHATS.pop(session_id, None)
         with pool.connection() as conn:
@@ -153,7 +169,9 @@ def start_session(body: UserIn):
 
         prompt = STATIC_PROMPT + "\n" + build_dynamic_prompt(user, topic, plan.skenario, plan.fokus_pola, progress, errors)
         ctx = SessionContext(conn=conn, user_id=user["id"], session_id=session_id)
+        t0 = time.perf_counter()
         state, reply = start_chat(ctx, prompt)
+        server_ms = _ms_since(t0)
         ctx.conn = None
 
     CHATS[session_id] = state
@@ -163,19 +181,30 @@ def start_session(body: UserIn):
         "topik": topic["judul"] if topic else None,
         "skenario": plan.skenario,
         "fokus_pola": plan.fokus_pola,
-        **_chat_response(session_id, state, reply),
+        **_chat_response(session_id, state, reply, server_ms),
     }
 
 
 @app.post("/api/sessions/{session_id}/messages")
 def send_message(session_id: int, body: MessageIn):
     state = _chat_or_error(session_id, body.user_id)
-    reply = _run(state, send_user_message, body.text)
-    return _chat_response(session_id, state, reply)
+    reply, server_ms = _run(state, send_user_message, body.text)
+    return _chat_response(session_id, state, reply, server_ms, user_turn=True)
 
 
 @app.post("/api/sessions/{session_id}/end")
 def end_session(session_id: int, body: UserIn):
     state = _chat_or_error(session_id, body.user_id)
-    reply = _run(state, finish_chat)
-    return _chat_response(session_id, state, reply)
+    reply, server_ms = _run(state, finish_chat)
+    return _chat_response(session_id, state, reply, server_ms)
+
+
+@app.get("/api/users/{user_id}/memory")
+def memory(user_id: int):
+    """Isi panel 'Yang diingat tentang kamu': memori jangka panjang agen yang tersimpan di database."""
+    with pool.connection() as conn:
+        _user_or_404(conn, user_id)
+        return {
+            "progres": db.get_pattern_progress(conn, user_id),
+            "kesalahan": db.get_error_log(conn, user_id, limit=5),
+        }
