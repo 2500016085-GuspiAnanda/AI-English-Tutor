@@ -1,6 +1,8 @@
 """Loop agen manual: LLM -> (tool calls -> hasil tool)* -> balasan teks."""
 
 import json
+import threading
+from dataclasses import dataclass, field
 
 import db
 from llm import MODEL, call_llm
@@ -115,34 +117,70 @@ def agent_step(ctx: SessionContext, messages: list[dict], debug: bool = False) -
     return "(agen berhenti: terlalu banyak pemanggilan tool dalam satu giliran)"
 
 
-def run_session(ctx: SessionContext, system_prompt: str, debug: bool = False) -> list[dict]:
-    """Jalankan percakapan CLI sampai end_session dipanggil atau batas giliran tercapai.
+# --- Logika sesi, bebas dari I/O: dipakai bersama oleh CLI (main.py) dan web (app.py) -------
 
-    Mengembalikan daftar pola yang streak-nya naik di sesi ini.
-    """
-    messages = [{"role": "system", "content": system_prompt}]
-    user_text, turn, wrapping = KICKOFF, 0, False
+@dataclass
+class ChatState:
+    """Semua yang perlu diingat tentang satu sesi di antara dua giliran pengguna."""
+    ctx: SessionContext
+    messages: list[dict]
+    turn: int = 0          # jumlah giliran pengguna yang sudah dipakai
+    closed: bool = False   # True setelah sesi ditutup dan progres dihitung
+    lock: threading.Lock = field(default_factory=threading.Lock)  # cegah 2 pesan diproses bersamaan (web)
+
+
+def _exchange(state: ChatState, text: str, debug: bool) -> str:
+    state.messages.append({"role": "user", "content": text})
+    db.save_message(state.ctx.conn, state.ctx.session_id, "user", text)
+    return agent_step(state.ctx, state.messages, debug)
+
+
+def close_chat(state: ChatState) -> None:
+    """Hitung progres pola tepat sekali per sesi."""
+    if not state.closed:
+        finalize_progress(state.ctx)
+        state.closed = True
+
+
+def start_chat(ctx: SessionContext, system_prompt: str, debug: bool = False) -> tuple[ChatState, str]:
+    """Buat state sesi baru dan kembalikan sapaan pembuka tutor."""
+    state = ChatState(ctx=ctx, messages=[{"role": "system", "content": system_prompt}])
+    return state, _exchange(state, KICKOFF, debug)
+
+
+def finish_chat(state: ChatState, debug: bool = False) -> str:
+    """Minta agen membuat rekap (end_session), lalu tutup sesi. Kembalikan balasan penutup."""
+    reply = "" if state.ctx.ended else _exchange(state, WRAPUP, debug)
+    close_chat(state)  # tetap ditutup walau agen lupa memanggil end_session
+    return reply
+
+
+def send_user_message(state: ChatState, text: str, debug: bool = False) -> str:
+    """Proses satu giliran pengguna. Sesi otomatis ditutup bila pengguna berhenti atau giliran habis."""
+    if state.closed:
+        raise ValueError("sesi sudah selesai")
+    if text.strip().lower() in QUIT_WORDS:
+        return finish_chat(state, debug)
+    state.turn += 1
+    reply = _exchange(state, text, debug)
+    if state.ctx.ended:
+        close_chat(state)
+    elif state.turn >= MAX_TURNS:
+        reply = f"{reply}\n\n{finish_chat(state, debug)}"
+    return reply
+
+
+# --- Antarmuka CLI ---------------------------------------------------------------------
+
+def run_session(ctx: SessionContext, system_prompt: str, debug: bool = False) -> None:
+    """Jalankan percakapan di terminal sampai sesi selesai."""
+    state, reply = start_chat(ctx, system_prompt, debug)
     try:
-        while True:
-            messages.append({"role": "user", "content": user_text})
-            db.save_message(ctx.conn, ctx.session_id, "user", user_text)
-            reply = agent_step(ctx, messages, debug)
-            if reply:
-                print(f"\nTutor: {reply}\n")
-            if ctx.ended or wrapping:
-                break  # selesai normal, atau agen tetap tidak memanggil end_session setelah diminta
-            if turn >= MAX_TURNS:
-                user_text, wrapping = WRAPUP, True
-                continue
-
-            raw = ""
-            while not raw:
-                raw = input(f"Kamu ({turn + 1}/{MAX_TURNS}): ").strip()
-            if raw.lower() in QUIT_WORDS:
-                user_text, wrapping = WRAPUP, True
-            else:
-                user_text, turn = raw, turn + 1
+        print(f"\nTutor: {reply}\n")
+        while not state.closed:
+            raw = input(f"Kamu ({state.turn + 1}/{MAX_TURNS}): ").strip()
+            if raw:
+                print(f"\nTutor: {send_user_message(state, raw, debug)}\n")
     finally:
-        # Streak dihitung sekali per sesi, termasuk bila sesi terputus (Ctrl+C / error API).
-        promoted = finalize_progress(ctx)
-    return promoted
+        # Progres tetap dihitung bila sesi terputus (Ctrl+C / error API).
+        close_chat(state)

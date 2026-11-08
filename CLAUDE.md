@@ -19,7 +19,8 @@ Tujuan utama: portofolio belajar agentic AI (tool calling, memori, planner).
 - Database: PostgreSQL native (tanpa Docker), driver `psycopg` 3
   - `schema.sql` untuk tabel, `seed.sql` untuk kurikulum pemula
   - Koneksi lewat `DATABASE_URL` di `.env`; `psql` ada di `D:\Program Files\PostgreSQL\18\bin` (tidak di PATH)
-- Frontend: satu halaman HTML/JS; voice via Web Speech API (STT + TTS browser)
+- Frontend: satu halaman `static/index.html` (HTML/JS tanpa framework) via `app.py`; voice via Web Speech API (STT + TTS browser)
+- Jalankan web: `uv run uvicorn app:app --reload`, CLI: `uv run main.py`
 
 ## Desain produk
 - Hanya bahasa Inggris. Level: pemula (dari nol), menengah, lanjut.
@@ -68,8 +69,8 @@ Gunakan `GENERATED ALWAYS AS IDENTITY`, `TIMESTAMPTZ`, `BOOLEAN`, dan
 1. M1: spike test tool calling DeepSeek (`spike_m1.py`)  -- selesai
 2. M2: loop agen di CLI + 4 tool + PostgreSQL  -- selesai
 3. M3: planner + tes penempatan + level  -- selesai
-4. M4: FastAPI + halaman web mode teks  <- posisi sekarang
-5. M5: voice (Web Speech API)
+4. M4: FastAPI + halaman web mode teks  -- selesai
+5. M5: voice (Web Speech API)  <- posisi sekarang
 6. M6: deploy ke VPS (PostgreSQL hanya listen di localhost) + uji coba teman sekelas
 
 Output portofolio: repo GitHub publik, README (diagram arsitektur, loop agen,

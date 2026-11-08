@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI English Tutor</title>
+<style>
+  /* ---------- Warna: terang & gelap (mengikuti pengaturan sistem) ---------- */
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #667085;
+    --line: #e4e7ec; --accent: #2f6fed; --accent-text: #ffffff;
+    --tutor: #eef2f8; --user: #2f6fed; --user-text: #ffffff;
+    --bad: #c4320a; --good: #067647;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151c; --card: #1a1f29; --text: #e6e9ef; --muted: #98a2b3;
+      --line: #2a3140; --accent: #5b8cff; --accent-text: #0b0e14;
+      --tutor: #222a37; --user: #3b6fe0; --user-text: #ffffff;
+      --bad: #ff8a65; --good: #4cc38a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 0 0 12px; }
+  .muted { color: var(--muted); font-size: .9rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-top: 16px; }
+  .hidden { display: none !important; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=text], textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); color: var(--text); font: inherit; }
+  button {
+    padding: 10px 16px; border: 0; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600;
+    background: var(--accent); color: var(--accent-text); }
+  button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .error { color: var(--bad); margin-top: 10px; min-height: 1.5em; }
+
+  /* ---------- Tes penempatan ---------- */
+  .question { margin-bottom: 18px; }
+  .question label { display: block; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+  .question label:hover { background: var(--tutor); }
+
+  /* ---------- Chat ---------- */
+  #chat-info { position: sticky; top: 0; background: var(--bg); padding: 8px 0; border-bottom: 1px solid var(--line); z-index: 1; }
+  #messages { display: flex; flex-direction: column; gap: 10px; padding: 16px 0 120px; }
+  .bubble { max-width: 85%; padding: 10px 14px; border-radius: 14px; overflow-wrap: anywhere; }
+  .bubble p { margin: 0 0 8px; } .bubble p:last-child { margin-bottom: 0; }
+  .bubble ul, .bubble ol { margin: 4px 0 8px; padding-left: 20px; }
+  .bubble blockquote { margin: 6px 0; padding-left: 10px; border-left: 3px solid var(--accent); }
+  .bubble code { background: rgba(127,127,127,.15); padding: 1px 4px; border-radius: 4px; }
+  .tutor { align-self: flex-start; background: var(--tutor); border-bottom-left-radius: 4px; }
+  .user  { align-self: flex-end; background: var(--user); color: var(--user-text); border-bottom-right-radius: 4px; white-space: pre-wrap; }
+  .typing { align-self: flex-start; color: var(--muted); font-style: italic; }
+  #composer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg); border-top: 1px solid var(--line); }
+  #composer .inner { max-width: 720px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 8px; }
+  #composer textarea { resize: none; height: 48px; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<main>
+  <h1>AI English Tutor</h1>
+  <div class="muted">Latihan percakapan bahasa Inggris dengan tutor AI</div>
+
+  <!-- ===== Layar 1: Login ===== -->
+  <section id="screen-login" class="card">
+    <h2>Masuk</h2>
+    <form id="login-form" class="row">
+      <input type="text" id="username" placeholder="Username (huruf, angka, _ . -)" autocomplete="username" required style="flex:1">
+      <button type="submit">Masuk</button>
+    </form>
+    <div class="error" id="login-error"></div>
+  </section>
+
+  <!-- ===== Layar 2: Tes penempatan ===== -->
+  <section id="screen-placement" class="card hidden">
+    <h2>Tes penempatan</h2>
+    <div id="placement-intro">
+      <p>5 soal pilihan ganda untuk menentukan levelmu. Kalau benar-benar baru belajar, boleh langsung mulai dari nol.</p>
+      <div class="row">
+        <button id="btn-take-test">Ikut tes</button>
+        <button id="btn-skip-test" class="secondary">Mulai dari nol (pemula)</button>
+      </div>
+    </div>
+    <form id="placement-form" class="hidden">
+      <div id="questions"></div>
+      <button type="submit">Kirim jawaban</button>
+    </form>
+    <div id="placement-result" class="hidden">
+      <p id="placement-result-text"></p>
+      <button id="btn-to-home">Lanjut</button>
+    </div>
+    <div class="error" id="placement-error"></div>
+  </section>
+
+  <!-- ===== Layar 3: Beranda ===== -->
+  <section id="screen-home" class="card hidden">
+    <h2 id="home-greeting"></h2>
+    <p id="home-info"></p>
+    <div class="row">
+      <button id="btn-start">Mulai sesi</button>
+      <button id="btn-logout" class="secondary">Ganti pengguna</button>
+    </div>
+    <div class="error" id="home-error"></div>
+  </section>
+
+  <!-- ===== Layar 4: Chat ===== -->
+  <section id="screen-chat" class="hidden">
+    <div id="chat-info" class="muted"></div>
+    <div id="messages"></div>
+  </section>
+</main>
+
+<div id="composer" class="hidden">
+  <div class="inner">
+    <textarea id="input" placeholder="Tulis dalam bahasa Inggris... (Enter = kirim, Shift+Enter = baris baru)"></textarea>
+    <button id="btn-send">Kirim</button>
+    <button id="btn-end" class="secondary" title="Akhiri sesi dan lihat rekap">Selesai</button>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+// State aplikasi: apa yang perlu diingat browser selama halaman terbuka
+// =====================================================================
+const state = { user: null, sessionId: null, busy: false };
+const $ = (id) => document.getElementById(id);
+
+// =====================================================================
+// api(): satu pintu untuk semua request ke server (mirip call_llm di Python)
+// =====================================================================
+async function api(path, body) {
+  const options = body === undefined ? {} : {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
+  const res = await fetch(path, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    // 422 dari Pydantic berupa daftar error; selain itu berupa teks
+    const d = data.detail;
+    throw new Error(Array.isArray(d) ? d.map((e) => e.msg).join("; ") : d || `Error ${res.status}`);
+  }
+  return data;
+}
+
+// Tampilkan satu layar, sembunyikan yang lain
+function show(screen) {
+  for (const s of ["login", "placement", "home", "chat"]) $(`screen-${s}`).classList.toggle("hidden", s !== screen);
+  $("composer").classList.toggle("hidden", screen !== "chat");
+}
+
+// localStorage bisa diblokir browser (mode privat), jadi selalu dibungkus try/catch
+function remember(username) { try { username ? localStorage.setItem("username", username) : localStorage.removeItem("username"); } catch {} }
+function remembered() { try { return localStorage.getItem("username"); } catch { return null; } }
+
+// =====================================================================
+// Markdown mini untuk balasan tutor (**tebal**, *miring*, daftar, kutipan).
+// Teks di-escape DULU agar HTML dari luar tidak pernah dijalankan (cegah XSS).
+// =====================================================================
+function escapeHtml(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function inline(s) {
+  return escapeHtml(s)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*\s][^*]*?)\*/g, "<em>$1</em>")
+    .replace(/(^|\s)_([^_]+?)_(?=\s|$|[.,!?:;])/g, "$1<em>$2</em>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+function markdown(src) {
+  const out = []; let para = []; let list = null;
+  const flushPara = () => { if (para.length) { out.push(`<p>${para.join("<br>")}</p>`); para = []; } };
+  const flushList = () => {
+    if (!list) return;
+    const start = list.start > 1 ? ` start="${list.start}"` : "";  // daftar bernomor yang terpotong paragraf tetap lanjut nomornya
+    out.push(`<${list.tag}${start}>${list.items.map((i) => `<li>${i}</li>`).join("")}</${list.tag}>`);
+    list = null;
+  };
+  const addItem = (tag, text, start = 1) => {
+    flushPara();
+    if (!list || list.tag !== tag) { flushList(); list = { tag, start, items: [] }; }
+    list.items.push(inline(text));
+  };
+  for (const raw of src.split("\n")) {
+    const line = raw.trimEnd(); let m;
+    if ((m = line.match(/^\s*[-*]\s+(.*)/))) addItem("ul", m[1]);
+    else if ((m = line.match(/^\s*(\d+)[.)]\s+(.*)/))) addItem("ol", m[2], Number(m[1]));
+    else if ((m = line.match(/^>\s?(.*)/))) { flushPara(); flushList(); out.push(`<blockquote>${inline(m[1])}</blockquote>`); }
+    else if ((m = line.match(/^#{1,6}\s+(.*)/))) { flushPara(); flushList(); out.push(`<p><strong>${inline(m[1])}</strong></p>`); }
+    else if (!line.trim()) { flushPara(); flushList(); }
+    else { flushList(); para.push(inline(line)); }
+  }
+  flushPara(); flushList();
+  return out.join("");
+}
+
+// =====================================================================
+// Layar 1: Login
+// =====================================================================
+async function login(username) {
+  state.user = await api("/api/login", { username });
+  remember(state.user.username);
+  if (state.user.sudah_tes) showHome(); else showPlacement();
+}
+
+$("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();  // cegah form memuat ulang halaman
+  $("login-error").textContent = "";
+  try { await login($("username").value.trim()); }
+  catch (err) { $("login-error").textContent = err.message; }
+});
+
+// =====================================================================
+// Layar 2: Tes penempatan
+// =====================================================================
+function showPlacement() {
+  $("placement-intro").classList.remove("hidden");
+  $("placement-form").classList.add("hidden");
+  $("placement-result").classList.add("hidden");
+  $("placement-error").textContent = "";
+  show("placement");
+}
+
+$("btn-take-test").addEventListener("click", async () => {
+  try {
+    const questions = await api("/api/placement/questions");
+    $("questions").innerHTML = questions.map((q) => `
+      <div class="question">
+        <strong>${q.no}. ${escapeHtml(q.soal)}</strong>
+        ${Object.entries(q.opsi).map(([letter, text]) => `
+          <label><input type="radio" name="q${q.no}" value="${letter}"> ${letter}) ${escapeHtml(text)}</label>
+        `).join("")}
+      </div>`).join("");
+    $("placement-intro").classList.add("hidden");
+    $("placement-form").classList.remove("hidden");
+  } catch (err) { $("placement-error").textContent = err.message; }
+});
+
+$("placement-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const answers = [1, 2, 3, 4, 5].map((n) => document.querySelector(`input[name=q${n}]:checked`)?.value);
+  if (answers.includes(undefined)) { $("placement-error").textContent = "Jawab semua soal dulu."; return; }
+  await submitPlacement(answers);
+});
+
+$("btn-skip-test").addEventListener("click", () => submitPlacement(null));
+
+async function submitPlacement(answers) {
+  $("placement-error").textContent = "";
+  try {
+    const r = await api("/api/placement", { user_id: state.user.id, answers });
+    state.user.level = r.level; state.user.sudah_tes = true;
+    $("placement-result-text").textContent = r.skor === null
+      ? "Kamu mulai dari level pemula."
+      : `Skor kamu ${r.skor}/5. Level: ${r.level}.`;
+    $("placement-intro").classList.add("hidden");
+    $("placement-form").classList.add("hidden");
+    $("placement-result").classList.remove("hidden");
+  } catch (err) { $("placement-error").textContent = err.message; }
+}
+
+$("btn-to-home").addEventListener("click", () => showHome());
+
+// =====================================================================
+// Layar 3: Beranda
+// =====================================================================
+async function showHome() {
+  state.user = await api("/api/login", { username: state.user.username });  // segarkan jumlah sesi hari ini
+  const u = state.user;
+  $("home-greeting").textContent = `Halo, ${u.username}!`;
+  $("home-info").textContent = `Level: ${u.level} · Sesi hari ini: ${u.sesi_hari_ini}/${u.batas_sesi}`;
+  $("btn-start").disabled = u.sesi_hari_ini >= u.batas_sesi;
+  $("home-error").textContent = u.sesi_hari_ini >= u.batas_sesi ? "Batas sesi hari ini sudah tercapai. Coba lagi besok." : "";
+  show("home");
+}
+
+$("btn-logout").addEventListener("click", () => { state.user = null; remember(null); $("username").value = ""; show("login"); });
+
+// =====================================================================
+// Layar 4: Chat
+// =====================================================================
+function addBubble(role, text) {
+  const div = document.createElement("div");
+  div.className = `bubble ${role}`;
+  if (role === "tutor") div.innerHTML = markdown(text);  // aman: markdown() meng-escape dulu
+  else div.textContent = text;                           // teks pengguna tidak pernah jadi HTML
+  $("messages").appendChild(div);
+  div.scrollIntoView({ behavior: "smooth", block: "end" });
+  return div;
+}
+
+function setBusy(busy, label = "Tutor sedang mengetik...") {
+  state.busy = busy;
+  $("btn-send").disabled = $("btn-end").disabled = $("input").disabled = busy;
+  $("typing")?.remove();
+  if (busy) {
+    const t = document.createElement("div");
+    t.id = "typing"; t.className = "typing"; t.textContent = label;
+    $("messages").appendChild(t);
+    t.scrollIntoView({ block: "end" });
+  } else {
+    $("input").focus();
+  }
+}
+
+function updateInfo(r) {
+  const materi = r.topik ? `Topik: ${r.topik}` : `Skenario: ${r.skenario}`;
+  if (r.topik !== undefined) state.header = `${materi} · Fokus: ${r.fokus_pola.join(", ")}`;
+  $("chat-info").textContent = `${state.header} · Giliran ${r.turn}/${r.max_turns}`;
+}
+
+$("btn-start").addEventListener("click", async () => {
+  $("home-error").textContent = "";
+  $("messages").innerHTML = "";
+  $("chat-info").textContent = "";
+  show("chat");
+  setBusy(true, "Planner sedang menyiapkan materi untukmu...");
+  try {
+    const r = await api("/api/sessions", { user_id: state.user.id });
+    state.sessionId = r.session_id;
+    setBusy(false);
+    updateInfo(r);
+    addBubble("tutor", r.reply);
+  } catch (err) {
+    setBusy(false);
+    show("home");
+    $("home-error").textContent = err.message;
+  }
+});
+
+async function send(path, body, userText) {
+  if (state.busy) return;
+  if (userText) addBubble("user", userText);
+  setBusy(true);
+  try {
+    const r = await api(path, body);
+    setBusy(false);
+    if (r.reply) addBubble("tutor", r.reply);
+    updateInfo(r);
+    if (r.selesai) showRecap(r);
+  } catch (err) {
+    setBusy(false);
+    addBubble("tutor", `⚠️ ${err.message}`);
+  }
+}
+
+function sendMessage() {
+  const text = $("input").value.trim();
+  if (!text) return;
+  $("input").value = "";
+  send(`/api/sessions/${state.sessionId}/messages`, { user_id: state.user.id, text }, text);
+}
+
+$("btn-send").addEventListener("click", sendMessage);
+$("input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }  // Shift+Enter = baris baru
+});
+$("btn-end").addEventListener("click", () =>
+  send(`/api/sessions/${state.sessionId}/end`, { user_id: state.user.id }));
+
+function showRecap(r) {
+  $("composer").classList.add("hidden");
+  const rows = (r.progres || []).map((p) => `
+    <tr><td>${escapeHtml(p.pola)}</td><td>${p.jumlah_salah}x</td>
+        <td>${p.sudah_dikuasai ? "✅ dikuasai" : `streak ${p.streak_benar}/3`}</td></tr>`).join("");
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `
+    <h2>Rekap sesi</h2>
+    ${r.ringkasan ? `<div class="bubble tutor" style="max-width:100%">${markdown(r.ringkasan)}</div>` : ""}
+    <h2 style="margin-top:16px">Progres pola</h2>
+    ${rows ? `<table><tr><th>Pola</th><th>Salah</th><th>Status</th></tr>${rows}</table>` : `<p class="muted">Belum ada pola tercatat.</p>`}
+    <div class="row" style="margin-top:16px"><button id="btn-back">Kembali ke beranda</button></div>`;
+  $("messages").appendChild(card);
+  card.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("btn-back").addEventListener("click", () => showHome());
+}
+
+// =====================================================================
+// Saat halaman dibuka: masuk otomatis jika username pernah disimpan
+// =====================================================================
+const saved = remembered();
+if (saved) login(saved).catch(() => show("login")); else show("login");
+</script>
+</body>
+</html>

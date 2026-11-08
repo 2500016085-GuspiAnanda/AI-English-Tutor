@@ -5,6 +5,7 @@ import os
 import psycopg
 from dotenv import load_dotenv
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 load_dotenv()
 
@@ -12,7 +13,17 @@ MASTERED_STREAK = 3  # sesi berturut-turut tanpa salah agar pola dianggap dikuas
 
 
 def connect() -> psycopg.Connection:
+    """Satu koneksi; cukup untuk CLI yang hanya melayani satu pengguna."""
     return psycopg.connect(os.environ["DATABASE_URL"], autocommit=True, row_factory=dict_row)
+
+
+def make_pool() -> ConnectionPool:
+    """Kumpulan koneksi untuk web: tiap request meminjam satu koneksi lalu mengembalikannya."""
+    return ConnectionPool(
+        os.environ["DATABASE_URL"],
+        kwargs={"autocommit": True, "row_factory": dict_row},
+        min_size=1, max_size=5, open=False,
+    )
 
 
 # --- users -----------------------------------------------------------------
@@ -27,6 +38,12 @@ def get_or_create_user(conn, username: str) -> dict:
         (username,),
     ).fetchone()
     return row
+
+
+def get_user(conn, user_id: int) -> dict | None:
+    return conn.execute(
+        "SELECT id, username, level, persona_default, sudah_tes FROM users WHERE id = %s", (user_id,)
+    ).fetchone()
 
 
 def set_placement(conn, user_id: int, level: str) -> None:
