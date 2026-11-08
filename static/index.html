@@ -400,20 +400,59 @@ function voiceFor(lang) {
   return voices.find((v) => v.lang.replace("_", "-") === lang) || voices.find((v) => v.lang.startsWith(lang.slice(0, 2)));
 }
 
-function stopSpeaking() { if (canSpeak) speechSynthesis.cancel(); }
+let speakToken = 0;   // naik setiap kali ucapan dibatalkan/diganti, agar timer lama tidak ikut berbicara
+
+function stopSpeaking() {
+  speakToken++;
+  if (canSpeak && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
+}
+
+// Dibacakan per kalimat: bahasa bisa berganti, dan Chrome kadang memotong ucapan yang terlalu panjang.
+// useChosenVoice=false -> biarkan browser memilih suara sendiri (dipakai saat percobaan kedua).
+function speakSentences(sentences, token, useChosenVoice) {
+  const attempt = { started: false, failed: null };
+  speechSynthesis.resume();   // pulihkan mesin suara yang "macet" dalam keadaan pause (bug Chrome/Edge)
+  for (const sentence of sentences) {
+    const u = new SpeechSynthesisUtterance(sentence);
+    u.lang = guessLang(sentence);
+    const voice = useChosenVoice ? voiceFor(u.lang) : null;
+    if (voice) u.voice = voice;
+    u.rate = u.lang === "en-US" ? 0.95 : 1;   // bahasa Inggris sedikit diperlambat agar mudah ditangkap
+    u.onstart = () => { attempt.started = true; };
+    u.onerror = (e) => {
+      if (["interrupted", "canceled"].includes(e.error) || token !== speakToken) return;  // dibatalkan sengaja
+      attempt.failed ??= e.error;
+      console.warn("TTS error:", e.error, voice?.name || "(suara bawaan)", sentence);
+    };
+    speechSynthesis.speak(u);
+  }
+  return attempt;
+}
 
 function speak(text) {
   if (!canSpeak) return;
   stopSpeaking();
-  // Dibacakan per kalimat: bahasa bisa berganti, dan Chrome kadang memotong ucapan yang terlalu panjang
-  for (const sentence of toSentences(text)) {
-    const u = new SpeechSynthesisUtterance(sentence);
-    u.lang = guessLang(sentence);
-    const voice = voiceFor(u.lang);
-    if (voice) u.voice = voice;
-    u.rate = u.lang === "en-US" ? 0.95 : 1;   // bahasa Inggris sedikit diperlambat agar mudah ditangkap
-    speechSynthesis.speak(u);
-  }
+  const token = speakToken;
+  const sentences = toSentences(text);
+  if (!sentences.length) return;
+
+  // Jeda singkat setelah cancel(): Chrome/Edge kadang membuang ucapan yang langsung dikirim setelahnya
+  setTimeout(() => {
+    if (token !== speakToken) return;
+    const first = speakSentences(sentences, token, true);
+
+    // Pengaman: 4 detik tanpa suara -> ulangi dengan suara bawaan browser; gagal lagi -> beri tahu pengguna
+    setTimeout(() => {
+      if (token !== speakToken || first.started) return;
+      speechSynthesis.cancel();
+      const second = speakSentences(sentences, token, false);
+      setTimeout(() => {
+        if (token !== speakToken || second.started) return;
+        const reason = second.failed || first.failed || "tidak ada suara";
+        voiceStatus(`Suara tutor gagal diputar (${reason}). Cek volume dan output suara Windows, lalu klik 🔊 Putar ulang.`);
+      }, 4000);
+    }, 4000);
+  }, 150);
 }
 
 function renderTtsButton() {
