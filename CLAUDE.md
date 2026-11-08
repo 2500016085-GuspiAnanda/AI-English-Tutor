@@ -19,7 +19,8 @@ Tujuan utama: portofolio belajar agentic AI (tool calling, memori, planner).
 - Database: PostgreSQL native (tanpa Docker), driver `psycopg` 3
   - `schema.sql` untuk tabel, `seed.sql` untuk kurikulum pemula
   - Koneksi lewat `DATABASE_URL` di `.env`; `psql` ada di `D:\Program Files\PostgreSQL\18\bin` (tidak di PATH)
-- Frontend: satu halaman `static/index.html` (HTML/JS tanpa framework) via `app.py`; voice via Web Speech API (STT + TTS browser)
+- Frontend: satu halaman tanpa framework, dipisah jadi `static/index.html` (struktur), `static/style.css`
+  (tampilan), `static/app.js` (perilaku); disajikan `app.py`. Voice via Web Speech API (STT + TTS browser)
 - Jalankan web: `uv run uvicorn app:app --reload`, CLI: `uv run main.py`
 
 ## Desain produk
@@ -27,8 +28,12 @@ Tujuan utama: portofolio belajar agentic AI (tool calling, memori, planner).
 - Tes penempatan 5 soal saat pertama masuk; opsi "mulai dari nol" melewati tes.
   Pilihan ganda statis di `placement.py`, dinilai kode: skor 0-2 pemula, 3-4 menengah, 5 lanjut.
 - Bahasa penjelasan: pemula = Indonesia, menengah = campuran, lanjut = English.
-- Persona dinamis: galak saat pengguna salah, santai saat benar.
-  Pemula: tegas tanpa sarkas. Menengah/lanjut: boleh sarkas ke jawaban, tidak pernah menghina orangnya.
+- Gaya mentor dipilih pengguna di beranda (`users.persona_default`, NULL = galak):
+  - galak: galak saat salah, santai saat benar. Pemula tanpa sarkas; menengah/lanjut boleh sarkas ke jawaban.
+  - lembut: sabar, akui usaha dulu lalu koreksi dengan tenang, tanpa sarkas.
+  Apa pun gayanya: tidak pernah menghina orangnya dan kesalahan tetap dikoreksi (save_mistake).
+  Teks gaya ada di `PERSONAS` (agent.py), diletakkan tepat setelah prompt statis agar cache tetap per gaya.
+  Ekspresi & nada suara: galak+salah = marah, lembut+salah = koreksi, benar = senang.
 - Kurikulum pemula 6 topik (di database): perkenalan diri, kampus & jurusan,
   rutinitas harian, hobi, arah & tempat, minta tolong.
 - Skenario menengah/lanjut: interview magang, presentasi kelas.

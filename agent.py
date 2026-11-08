@@ -17,9 +17,8 @@ Kamu adalah tutor bahasa Inggris untuk mahasiswa Indonesia. Kamu mengajak penggu
 dalam bahasa Inggris sesuai topik/skenario sesi, lalu mengoreksi kesalahannya.
 
 ## Persona
-- Dinamis: galak dan tegas saat pengguna salah, santai dan hangat saat pengguna benar.
-- Level pemula: tegas tetapi TANPA sarkasme.
-- Level menengah/lanjut: boleh sarkas terhadap JAWABANNYA, tetapi TIDAK PERNAH menghina orangnya.
+- Gaya bicaramu mengikuti bagian "Gaya mentor" di bawah (dipilih sendiri oleh pengguna).
+- Apa pun gayanya: TIDAK PERNAH menghina orangnya, dan setiap kesalahan tetap dikoreksi.
 
 ## Bahasa penjelasan
 - pemula: jelaskan koreksi dalam Bahasa Indonesia; kalimat bahasa Inggrismu pendek dan sederhana.
@@ -52,15 +51,37 @@ WRAPUP = "[SISTEM] Sesi selesai. Jangan bertanya lagi. Panggil end_session denga
 QUIT_WORDS = {"/selesai", "/quit", "exit", "quit"}
 
 
+# Gaya mentor pilihan pengguna (users.persona_default). Diletakkan tepat setelah STATIC_PROMPT,
+# sehingga semua pengguna dengan gaya yang sama tetap berbagi prefix yang kena cache.
+PERSONAS = {
+    "galak": (
+        "## Gaya mentor: galak\n"
+        "- Galak dan tegas saat pengguna salah, santai dan hangat saat pengguna benar.\n"
+        "- Level pemula: tegas tetapi TANPA sarkasme.\n"
+        "- Level menengah/lanjut: boleh sarkas terhadap JAWABANNYA, tetapi tidak pernah ke orangnya."
+    ),
+    "lembut": (
+        "## Gaya mentor: lembut\n"
+        "- Sabar dan hangat seperti mentor pribadi. Saat pengguna salah: akui dulu usahanya, lalu koreksi\n"
+        "  dengan jelas dan tenang. Tanpa sarkasme sama sekali.\n"
+        "- Saat pengguna benar: puji secara spesifik, sebut bagian yang sudah tepat.\n"
+        "- Kalimat pendek, nada menyemangati, tidak menggurui."
+    ),
+}
+DEFAULT_PERSONA = "galak"
+
 # Sengaja TIDAK menyebut bahwa koreksi tampil otomatis di layar: saat diuji, kalimat semacam itu
 # membuat model berhenti memanggil save_mistake (kesalahan tidak tersimpan). Cukup larang emoji.
 WEB_UI_NOTE = "- antarmuka: web. Tulis balasan tanpa emoji."
 
 
 def build_dynamic_prompt(user: dict, topic: dict | None, skenario: str | None, fokus: list[str],
-                         progress: list[dict], errors: list[dict], web: bool = False) -> str:
+                         progress: list[dict], errors: list[dict], web: bool = False,
+                         persona: str = DEFAULT_PERSONA) -> str:
     """Bagian DINAMIS: data pengguna dan sesi -> diletakkan di belakang agar tidak merusak cache."""
     lines = [
+        PERSONAS.get(persona, PERSONAS[DEFAULT_PERSONA]),
+        "",
         "## Data sesi ini",
         f"- user_id: {user['id']}",
         f"- username: {user['username']}",

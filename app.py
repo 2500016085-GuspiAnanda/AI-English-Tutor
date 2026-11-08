@@ -11,11 +11,13 @@ from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from openai import APIError
 from pydantic import BaseModel, Field
 
 import db
-from agent import MAX_TURNS, STATIC_PROMPT, ChatState, build_dynamic_prompt, finish_chat, send_user_message, start_chat
+from agent import (DEFAULT_PERSONA, MAX_TURNS, STATIC_PROMPT, ChatState, build_dynamic_prompt, finish_chat,
+                   send_user_message, start_chat)
 from main import MAX_SESSIONS_PER_DAY
 from placement import LETTERS, QUESTIONS, grade
 from planner import plan_session
@@ -37,6 +39,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AI English Tutor", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")   # style.css, app.js
 
 
 @app.exception_handler(APIError)
@@ -57,6 +60,10 @@ class UserIn(BaseModel):
 class PlacementIn(UserIn):
     answers: Annotated[list[Literal["a", "b", "c", "d"]], Field(min_length=5, max_length=5)] | None = Field(
         default=None, description="5 huruf jawaban; null = mulai dari nol sebagai pemula")
+
+
+class PersonaIn(UserIn):
+    persona: Literal["galak", "lembut"]
 
 
 class MessageIn(UserIn):
@@ -154,6 +161,15 @@ def placement(body: PlacementIn):
     return {"skor": score, "level": level}
 
 
+@app.post("/api/persona")
+def set_persona(body: PersonaIn):
+    """Simpan gaya mentor pilihan pengguna; berlaku mulai sesi berikutnya."""
+    with pool.connection() as conn:
+        _user_or_404(conn, body.user_id)
+        db.set_persona(conn, body.user_id, body.persona)
+    return {"persona": body.persona}
+
+
 @app.post("/api/sessions")
 def start_session(body: UserIn):
     with pool.connection() as conn:
@@ -168,9 +184,10 @@ def start_session(body: UserIn):
             raise HTTPException(500, "kurikulum pemula kosong, jalankan seed.sql")
         session_id = db.create_session(conn, user["id"], topic["id"] if topic else None, plan.skenario, plan.fokus_pola)
 
+        persona = user["persona_default"] or DEFAULT_PERSONA
         prompt = STATIC_PROMPT + "\n" + build_dynamic_prompt(
-            user, topic, plan.skenario, plan.fokus_pola, progress, errors, web=True)
-        ctx = SessionContext(conn=conn, user_id=user["id"], session_id=session_id)
+            user, topic, plan.skenario, plan.fokus_pola, progress, errors, web=True, persona=persona)
+        ctx = SessionContext(conn=conn, user_id=user["id"], session_id=session_id, persona=persona)
         t0 = time.perf_counter()
         state, reply = start_chat(ctx, prompt)
         server_ms = _ms_since(t0)
@@ -183,6 +200,7 @@ def start_session(body: UserIn):
         "topik": topic["judul"] if topic else None,
         "skenario": plan.skenario,
         "fokus_pola": plan.fokus_pola,
+        "persona": persona,
         **_chat_response(session_id, state, reply, server_ms),
     }
 

@@ -46,6 +46,10 @@ def get_user(conn, user_id: int) -> dict | None:
     ).fetchone()
 
 
+def set_persona(conn, user_id: int, persona: str) -> None:
+    conn.execute("UPDATE users SET persona_default = %s WHERE id = %s", (persona, user_id))
+
+
 def set_placement(conn, user_id: int, level: str) -> None:
     conn.execute("UPDATE users SET level = %s, sudah_tes = true WHERE id = %s", (level, user_id))
 

@@ -6,7 +6,7 @@ Jalankan: uv run main.py [--debug]
 import sys
 
 import db
-from agent import STATIC_PROMPT, build_dynamic_prompt, run_session
+from agent import DEFAULT_PERSONA, STATIC_PROMPT, build_dynamic_prompt, run_session
 from placement import run_placement
 from planner import plan_session
 from tools import SessionContext
@@ -45,9 +45,10 @@ def main() -> int:
               f"fokus: {', '.join(plan.fokus_pola)}")
         print("Ketik /selesai untuk mengakhiri sesi.\n")
 
+        persona = user["persona_default"] or DEFAULT_PERSONA
         system_prompt = STATIC_PROMPT + "\n" + build_dynamic_prompt(
-            user, topic, plan.skenario, plan.fokus_pola, progress, errors)
-        ctx = SessionContext(conn=conn, user_id=user["id"], session_id=session_id)
+            user, topic, plan.skenario, plan.fokus_pola, progress, errors, persona=persona)
+        ctx = SessionContext(conn=conn, user_id=user["id"], session_id=session_id, persona=persona)
         try:
             run_session(ctx, system_prompt, debug)
         except KeyboardInterrupt:

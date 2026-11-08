@@ -6,7 +6,8 @@ CREATE TABLE users (
     username        TEXT NOT NULL UNIQUE,
     level           TEXT NOT NULL DEFAULT 'pemula'
                     CHECK (level IN ('pemula', 'menengah', 'lanjut')),
-    persona_default TEXT,
+    persona_default TEXT                              -- gaya mentor; NULL = galak
+                    CHECK (persona_default IN ('galak', 'lembut')),
     sudah_tes       BOOLEAN NOT NULL DEFAULT false,  -- tes penempatan selesai / dilewati
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );

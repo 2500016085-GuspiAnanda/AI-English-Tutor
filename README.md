@@ -15,7 +15,9 @@ dengan loop agen yang ditulis manual (tanpa LangChain/LangGraph/CrewAI) dan SQL 
 - **Planner**: sebelum sesi, LLM membaca riwayat kesalahan dan memilih topik/skenario serta 1–2 pola fokus.
 - **Percakapan dengan agen** (maks. 10 giliran): agen memutuskan sendiri kapan memanggil tool untuk
   mencatat kesalahan, mencatat kemajuan, membaca riwayat, dan menutup sesi.
-- **Persona dinamis**: tegas saat pengguna salah, santai saat benar. Bahasa penjelasan mengikuti level
+- **Dua gaya mentor**, dipilih pengguna: **galak** (tegas, boleh menyindir jawaban di level menengah ke atas)
+  atau **lembut** (sabar, menyemangati). Gaya mengubah kata-kata tutor, ekspresi wajah, dan nada suara
+  (kecepatan dan tinggi suara ikut ekspresi tiap giliran). Bahasa penjelasan mengikuti level
   (pemula: Indonesia, menengah: campuran, lanjut: English).
 - **Pelacakan pola**: sebuah pola (mis. `simple past`) dianggap dikuasai setelah 3 sesi berturut-turut tanpa salah.
 - **Mode suara**: tahan tombol (atau spasi) untuk bicara, lepas untuk mengirim. Balasan dibacakan.
@@ -182,7 +184,7 @@ llm.py           call_llm(): satu pintu ke DeepSeek
 db.py            semua query SQL + connection pool
 app.py           API FastAPI + penyaji halaman web
 main.py          antarmuka CLI
-static/index.html  halaman web (HTML/CSS/JS tanpa framework)
+static/          halaman web tanpa framework: index.html, style.css, app.js
 schema.sql, seed.sql
 spike_m1.py      uji awal tool calling DeepSeek
 ```

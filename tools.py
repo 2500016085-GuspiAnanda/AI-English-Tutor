@@ -64,6 +64,7 @@ class SessionContext:
     correct: set[str] = field(default_factory=set)  # pola yang dipakai benar di sesi ini
     ended: bool = False
     ringkasan: str | None = None
+    persona: str = "galak"
     # Catatan per giliran (direset oleh new_turn): dipakai web untuk ekspresi wajah & info kecepatan
     turn_mistakes: int = 0
     turn_correct: int = 0
@@ -82,7 +83,7 @@ class SessionContext:
         user_turn=True: pengguna baru saja mengirim kalimat; tanpa save_mistake berarti kalimatnya benar.
         """
         if self.turn_mistakes:
-            return "marah"
+            return "koreksi" if self.persona == "lembut" else "marah"   # mentor lembut tidak marah, tapi tetap mengoreksi
         if self.turn_correct or user_turn:
             return "senang"
         return "netral"
