@@ -5,7 +5,8 @@ Tutor percakapan bahasa Inggris berbasis **agen AI** untuk mahasiswa Indonesia. 
 memakai catatan itu untuk merencanakan sesi berikutnya.
 
 Proyek ini adalah portofolio belajar *agentic AI*: **tool calling, memori jangka panjang, dan planner**,
-dengan loop agen yang ditulis manual (tanpa LangChain/LangGraph/CrewAI) dan SQL yang ditulis manual (tanpa ORM).
+dengan loop agen yang ditulis manual (tanpa LangChain/LangGraph/CrewAI). Backend memakai **Django** (ORM, migrations,
+panel admin); versi awal memakai FastAPI + SQL manual, lalu dimigrasi bertahap tanpa mengubah loop agen.
 
 > 🎥 Video demo: _menyusul_
 
@@ -16,40 +17,48 @@ dengan loop agen yang ditulis manual (tanpa LangChain/LangGraph/CrewAI) dan SQL 
 - **Percakapan dengan agen** (maks. 10 giliran): agen memutuskan sendiri kapan memanggil tool untuk
   mencatat kesalahan, mencatat kemajuan, membaca riwayat, dan menutup sesi.
 - **Dua gaya mentor**, dipilih pengguna: **galak** (tegas, boleh menyindir jawaban di level menengah ke atas)
-  atau **lembut** (sabar, menyemangati). Gaya mengubah kata-kata tutor, ekspresi wajah, dan nada suara
-  (kecepatan dan tinggi suara ikut ekspresi tiap giliran). Bahasa penjelasan mengikuti level
+  atau **lembut** (sabar, menyemangati). Gaya mengubah kata-kata tutor, ekspresi wajah, dan suaranya.
+  Bahasa penjelasan mengikuti level
   (pemula: Indonesia, menengah: campuran, lanjut: English).
 - **Pelacakan pola**: sebuah pola (mis. `simple past`) dianggap dikuasai setelah 3 sesi berturut-turut tanpa salah.
-- **Mode suara**: tahan tombol (atau spasi) untuk bicara, lepas untuk mengirim. Balasan dibacakan.
-  Speech-to-text dan text-to-speech memakai Web Speech API bawaan browser, tanpa biaya API tambahan.
+- **Mode suara**: tahan tombol (atau spasi) untuk bicara, lepas untuk mengirim. Speech-to-text memakai Web Speech API
+  bawaan browser.
+- **Suara tutor yang berekspresi** ([tts.py](tts.py)): balasan dibacakan **Gemini TTS** dengan logat Indonesia dan
+  intonasi sesuai situasi: kesal saat mentor galak menegur, hangat saat mentor lembut mengoreksi, ceria saat kamu benar.
+  Arahan gaya dikirim sebagai catatan sutradara, dan audio dialirkan sehingga tutor mulai bicara ±1 detik kemudian.
+  Kuota gratis Gemini hanya 10 suara/hari, jadi Gemini dipakai untuk giliran yang emosinya penting; balasan lain,
+  dan semua balasan setelah kuota habis, memakai suara browser.
 - **Wajah tutor berekspresi**: marah 🔥 saat kamu salah, senang saat benar. Ekspresi **tidak ditebak dari
   teks**, melainkan diambil dari keputusan agen sendiri: giliran dengan `save_mistake` berarti marah.
 - **Panel "Yang diingat tentang kamu"**: menampilkan memori jangka panjang agen (pola, streak, kesalahan terakhir).
 - **Info kecepatan per giliran**: `dengar 0.4 s · agen 2.8 s (2× LLM, save_mistake ×2) · suara 0.2 s`,
   sekaligus memperlihatkan berapa kali LLM dipanggil dan tool apa saja yang dipakai agen.
-- **Dua antarmuka, satu logika**: web (FastAPI + satu halaman HTML/JS) dan CLI.
+- **Dua antarmuka, satu logika**: web (Django + satu halaman HTML/JS) dan CLI.
+- **Panel admin** di `/admin/`: pelajar, sesi lengkap dengan percakapannya, kesalahan yang dicatat agen, dan progres pola.
 
 ## Arsitektur
 
 ```mermaid
 flowchart LR
-    subgraph Browser["Browser (static/index.html)"]
+    subgraph Browser["Browser (public/index.html)"]
         UI[Chat UI]
         STT[SpeechRecognition<br/>suara → teks]
-        TTS[speechSynthesis<br/>teks → suara]
+        TTS[Web Audio + speechSynthesis<br/>teks → suara]
     end
-    subgraph Server["Server Python"]
-        API[app.py<br/>FastAPI]
+    subgraph Server["Server Python (Django)"]
+        API[tutor/views.py<br/>API + admin]
+        VOX[tts.py<br/>suara tutor]
         CLI[main.py<br/>CLI]
         AG[agent.py<br/>loop agen]
         PL[planner.py]
         TL[tools.py<br/>4 tool + Pydantic]
         LLM[llm.py<br/>call_llm]
-        DB[db.py<br/>SQL manual]
+        DB[db.py<br/>ORM Django]
     end
     STT --> UI --> API
     API --> UI --> TTS
     API --> PL & AG
+    API --> VOX <--> GM[(Gemini TTS)]
     CLI --> PL & AG
     PL --> LLM
     AG --> LLM
@@ -60,7 +69,7 @@ flowchart LR
 ```
 
 `agent.py` tidak tahu apa-apa soal HTTP atau terminal. Ia hanya menyediakan `start_chat()`,
-`send_user_message()`, dan `finish_chat()`. `main.py` (CLI) dan `app.py` (web) hanya menerjemahkan
+`send_user_message()`, dan `finish_chat()`. `main.py` (CLI) dan `tutor/views.py` (web) hanya menerjemahkan
 input/output ke fungsi-fungsi tersebut.
 
 ## Alur satu sesi
@@ -68,7 +77,7 @@ input/output ke fungsi-fungsi tersebut.
 ```mermaid
 sequenceDiagram
     participant U as Pengguna
-    participant A as app.py
+    participant A as views.py
     participant P as Planner
     participant G as Agen
     participant D as PostgreSQL
@@ -142,49 +151,61 @@ Hasil terukur saat pengujian: sejak giliran kedua, sekitar **90% token prompt ke
 
 ## Database
 
-Enam tabel PostgreSQL ([schema.sql](schema.sql)): `users`, `curriculum_topics`, `sessions`, `messages`,
-`mistakes`, `pattern_progress`. Seluruh query ada di [db.py](db.py). Contoh upsert progres pola:
+Enam tabel PostgreSQL, didefinisikan sebagai model Django di [tutor/models.py](tutor/models.py):
+`Pelajar` (`users`), `Topik` (`curriculum_topics`), `Sesi` (`sessions`), `Pesan` (`messages`), `Kesalahan` (`mistakes`),
+`ProgresPola` (`pattern_progress`). Constraint tetap dijaga di level database (`CHECK`, `UNIQUE`, `ON DELETE CASCADE`),
+dan perubahan skema dicatat sebagai migration. Seluruh akses data tetap lewat satu pintu, [db.py](db.py), sehingga
+agen tidak tahu ada ORM di baliknya. Contoh progres pola saat salah, pengganti `INSERT ... ON CONFLICT`:
 
-```sql
-INSERT INTO pattern_progress (user_id, pola, jumlah_salah, streak_benar, sudah_dikuasai)
-VALUES (%s, %s, 1, 0, false)
-ON CONFLICT (user_id, pola) DO UPDATE SET
-    jumlah_salah = pattern_progress.jumlah_salah + 1,
-    streak_benar = 0, sudah_dikuasai = false, terakhir_muncul = now()
+```python
+ProgresPola.objects.update_or_create(
+    user_id=user_id, pola=pola,
+    create_defaults={"jumlah_salah": 1, "streak_benar": 0, "sudah_dikuasai": False},          # baris baru
+    defaults={"jumlah_salah": F("jumlah_salah") + 1, "streak_benar": 0, "sudah_dikuasai": False,  # baris lama
+              "terakhir_muncul": Now()},
+)
 ```
+
+`F("jumlah_salah") + 1` dihitung di database, jadi tidak ada tambahan yang hilang walau dua request berjalan bersamaan.
 
 ## Menjalankan secara lokal
 
 Prasyarat: Python 3.14, [uv](https://docs.astral.sh/uv/), PostgreSQL, dan API key DeepSeek.
+API key Gemini opsional: tanpa key, tutor memakai suara browser.
 
 ```bash
 uv sync
-cp .env.example .env            # lalu isi DEEPSEEK_API_KEY dan DATABASE_URL
+cp .env.example .env            # lalu isi DEEPSEEK_API_KEY, DATABASE_URL, dan (opsional) GEMINI_API_KEY
 
 # buat database (sesuaikan user/password)
 psql -U postgres -c "CREATE ROLE ai_tutor LOGIN PASSWORD 'password'"
 psql -U postgres -c "CREATE DATABASE ai_english_tutor OWNER ai_tutor"
-psql -U ai_tutor -d ai_english_tutor -f schema.sql
-psql -U ai_tutor -d ai_english_tutor -f seed.sql
+uv run python manage.py migrate                  # buat semua tabel dari migration
+psql -U ai_tutor -d ai_english_tutor -f seed.sql # kurikulum 6 topik pemula
+uv run python manage.py createsuperuser          # akun untuk panel admin /admin/
 
-uv run uvicorn app:app --reload  # web: buka http://localhost:8000 (API docs: /docs)
-uv run main.py --debug           # atau CLI, dengan log tool call dan token
+uv run python manage.py runserver                # web: buka http://localhost:8000
+uv run main.py --debug                           # atau CLI, dengan log tool call dan token
 ```
+
+Database lama yang dibuat dari `schema.sql` (sebelum Django) cukup diserahkan sekali ke Django dengan
+`uv run python manage.py adopt_legacy_db`: perintah ini merapikan selisih kecil skema lalu menjalankan `migrate --fake-initial`.
 
 Input suara hanya berjalan di **Google Chrome** atau **Microsoft Edge**, dan hanya di `localhost` atau HTTPS.
 
 ## Tes
 
 ```bash
-uv run pytest                                  # 57 tes, ~3 detik, tanpa memanggil DeepSeek
+uv run pytest                                  # 75 tes, ~3 detik, tanpa memanggil DeepSeek/Gemini
 RUN_LIVE=1 uv run pytest tests/test_live.py    # tes perilaku model ke DeepSeek sungguhan (berbayar)
 ```
 
 | Lapis | Isi |
 |---|---|
-| `test_unit.py` | Logika murni: penilaian tes, validasi argumen tool, mood, planner, susunan prompt |
-| `test_db.py` | Query SQL ke PostgreSQL: upsert progres pola, streak sampai "dikuasai", constraint, cascade |
-| `test_api.py` | Semua endpoint dan loop agen penuh dengan **LLM tiruan** berjawaban terskrip, sehingga alur tool call → DB → mood → koreksi diuji secara deterministik |
+| `test_unit.py` | Logika murni: penilaian tes, validasi argumen tool, mood, planner, susunan prompt dan naskah TTS |
+| `test_db.py` | Fungsi ORM di `db.py` ke PostgreSQL: progres pola, streak sampai "dikuasai", constraint, cascade |
+| `test_api.py` | Semua endpoint (lewat test client Django) dan loop agen penuh dengan **LLM tiruan** berjawaban terskrip, sehingga alur tool call → DB → mood → koreksi diuji secara deterministik; termasuk suara (Gemini tiruan), kuota habis, dan pembatasan sesi |
+| `test_admin.py` | Panel admin: wajib login, setiap halaman daftar dan form terbuka |
 | `test_live.py` | Perilaku DeepSeek sendiri: model tetap memanggil `save_mistake` di kedua gaya mentor. Menjaga regresi nyata saat sebuah instruksi prompt pernah membuat model berhenti mencatat kesalahan |
 
 Tes database dan API memakai `DATABASE_URL`; pengguna buatan tes berawalan `pytest_` dan dihapus otomatis.
@@ -197,23 +218,36 @@ tools.py         4 tool: skema Pydantic + eksekutor
 planner.py       perencana sesi (1 panggilan LLM, JSON mode, rencana cadangan deterministik)
 placement.py     tes penempatan 5 soal, dinilai kode
 llm.py           call_llm(): satu pintu ke DeepSeek
-db.py            semua query SQL + connection pool
-app.py           API FastAPI + penyaji halaman web
+tts.py           suara tutor: Gemini TTS dengan catatan sutradara per mood & gaya mentor
+db.py            satu pintu akses data (ORM Django)
 main.py          antarmuka CLI
-static/          halaman web tanpa framework: index.html, style.css, app.js
-schema.sql, seed.sql
+manage.py        perintah Django (runserver, migrate, createsuperuser, ...)
+config/          project Django: settings.py, urls.py
+tutor/           app Django: models, views (API), urls, admin, schemas (Pydantic), migrations,
+                 management/commands/adopt_legacy_db.py
+public/          halaman web tanpa framework: index.html, static/style.css, static/app.js
+seed.sql         kurikulum pemula
+schema.sql       skema awal (referensi; skema kini dikelola migration Django)
 spike_m1.py      uji awal tool calling DeepSeek
-tests/           57 tes pytest (unit, database, API + loop agen dengan LLM tiruan) + tes live
+tests/           75 tes pytest (unit, database, API + loop agen dengan LLM tiruan, admin) + tes live
 ```
 
 ## Keputusan desain dan batasan
 
 - **Tanpa framework agen**, supaya setiap langkah loop (panggilan LLM, tool call, hasil tool) terlihat dan bisa dijelaskan.
+- **Django untuk lapisan web, bukan untuk agen.** Migrasi dari FastAPI hanya mengganti `db.py` (SQL manual → ORM) dan
+  lapisan HTTP (`app.py` → `tutor/views.py`). Loop agen, tool, dan planner tidak berubah, karena hanya bergantung
+  pada fungsi-fungsi di `db.py`. Validasi request tetap memakai Pydantic, yang juga dipakai untuk argumen tool.
 - **Tes penempatan dinilai kode, bukan LLM**, karena penempatan level perlu hasil yang konsisten.
 - **Planner punya rencana cadangan deterministik**: jika output LLM tidak valid, sesi tetap berjalan.
-- **State sesi aktif disimpan di memori server.** Jika server restart, sesi yang sedang berjalan hilang
-  (data di database tetap aman). Cukup untuk skala uji coba; bisa dibangun ulang dari tabel `messages` bila dibutuhkan.
-- **Login hanya username** (tanpa password) sesuai cakupan MVP. Batas 3 sesi per hari per pengguna.
+- **Server stateless.** Percakapan yang sedang berjalan disimpan di kolom `sessions.state` (JSONB), bukan di memori:
+  tiap request memuat state, menjalankan satu giliran, lalu menyimpannya lagi. Sesi tetap bertahan walau server
+  restart, dan aplikasi bisa berjalan di platform serverless (Vercel) dengan banyak instance sekaligus.
+- **Kunci sesi di database** (`sessions.busy_until`): dua pesan yang dikirim bersamaan ke satu sesi tidak saling
+  menimpa; pesan kedua ditolak dengan 409. Kunci punya batas waktu, jadi lepas sendiri bila server mati di tengah proses.
+- **Login hanya username** (tanpa password) sesuai cakupan MVP. Batas 3 sesi per hari (dihitung dalam WIB) per pengguna.
+- **Suara Gemini dibatasi**: `/api/tts` hanya melayani pemilik sesi yang dibuat dalam 6 jam terakhir, agar kuota tidak
+  dipakai pihak lain. Bila Gemini gagal atau kuota habis, browser otomatis memakai suara bawaannya.
 - **Privasi suara**: di Chrome, audio mikrofon diproses oleh layanan Google; di Edge oleh layanan Microsoft.
 - Tidak ada penilaian pelafalan; yang ditampilkan adalah transkrip hasil speech-to-text.
 
@@ -224,4 +258,5 @@ tests/           57 tes pytest (unit, database, API + loop agen dengan LLM tirua
 - [x] M3 Planner + tes penempatan + level
 - [x] M4 FastAPI + halaman web
 - [x] M5 Suara (Web Speech API)
+- [x] Migrasi backend ke Django (ORM, migrations, panel admin) + suara tutor Gemini TTS
 - [ ] M6 Deploy ke VPS (HTTPS, PostgreSQL hanya di localhost) + uji coba dengan teman sekelas

@@ -7,22 +7,31 @@ Tujuan utama: portofolio belajar agentic AI (tool calling, memori, planner).
 - Jawab dalam Bahasa Indonesia, formal dan langsung ke inti.
 - Perubahan kode minimal dan terarah. Jangan mengubah hal yang tidak diminta.
 - Jangan pakai framework agen (LangGraph, CrewAI, dll.). Loop agen ditulis manual.
-- Jangan pakai ORM. SQL ditulis manual, semua query di `db.py`.
+- Akses database lewat ORM Django, dan SEMUA akses data tetap di `db.py` (agen/tools/planner tidak memakai model langsung).
+  Fungsi `db.py` mengembalikan dict biasa. Perubahan skema: ubah `tutor/models.py` lalu `manage.py makemigrations`.
 - Jalankan Python dengan `uv run`, tambah library dengan `uv add`.
 - Jangan pernah membaca, mencetak, atau commit isi `.env`.
+- Pengguna sedang belajar Django: setiap perubahan Django disertai penjelasan singkat konsepnya.
 
 ## Stack
-- Python + `uv`, FastAPI, Pydantic v2
+- Python + `uv`, Django 6 (lapisan web, ORM, admin), Pydantic v2 (validasi request API & argumen tool)
 - LLM: DeepSeek `deepseek-v4-flash` via OpenAI SDK, langsung (tanpa router)
   - Config di `.env`: `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL`
   - Semua pemanggilan API lewat satu fungsi `call_llm()`; retry 2x, tanpa fallback
-- Database: PostgreSQL native (tanpa Docker), driver `psycopg` 3
-  - `schema.sql` untuk tabel, `seed.sql` untuk kurikulum pemula
+- Database: PostgreSQL native (tanpa Docker), driver `psycopg` 3, dikelola migration Django
+  - Model di `tutor/models.py` (nama tabel lama via `db_table`); `seed.sql` untuk kurikulum pemula;
+    `schema.sql` hanya referensi sejarah. DB lama: `manage.py adopt_legacy_db` (sekali jalan)
   - Koneksi lewat `DATABASE_URL` di `.env`; `psql` ada di `D:\Program Files\PostgreSQL\18\bin` (tidak di PATH)
-- Frontend: satu halaman tanpa framework, dipisah jadi `static/index.html` (struktur), `static/style.css`
-  (tampilan), `static/app.js` (perilaku); disajikan `app.py`. Voice via Web Speech API (STT + TTS browser)
-- Jalankan web: `uv run uvicorn app:app --reload`, CLI: `uv run main.py`
-- Tes: `uv run pytest` (LLM tiruan, tanpa biaya). Setelah mengubah prompt, WAJIB juga
+- Django: project `config/` (settings, urls), app `tutor/` (models, views, urls, admin, schemas). TIME_ZONE Asia/Jakarta.
+  API JSON di `tutor/views.py` memakai decorator `@api(method, SkemaPydantic)`; panel admin di `/admin/`.
+- Frontend: satu halaman tanpa framework, dipisah jadi `public/index.html` (struktur), `public/static/style.css`
+  (tampilan), `public/static/app.js` (perilaku); di Vercel disajikan CDN, di lokal oleh Django (DEBUG).
+  STT via Web Speech API browser.
+- Suara tutor: Gemini TTS (`tts.py`, `gemini-3.8-flash-tts`, WAJIB API `v1beta`), `GEMINI_API_KEY` di `.env` (opsional).
+  Suara Bodi (galak) / Fola (lembut), catatan sutradara per mood. Paket gratis 10 suara/hari: Gemini hanya untuk mood
+  marah/koreksi/senang; selebihnya & saat gagal/kuota habis memakai suara browser.
+- Jalankan web: `uv run python manage.py runserver`, CLI: `uv run main.py`
+- Tes: `uv run pytest` (LLM & Gemini tiruan, tanpa biaya). Setelah mengubah prompt, WAJIB juga
   `RUN_LIVE=1 uv run pytest tests/test_live.py`: perubahan prompt bisa diam-diam menghentikan tool calling.
 
 ## Desain produk
@@ -80,6 +89,7 @@ Gunakan `GENERATED ALWAYS AS IDENTITY`, `TIMESTAMPTZ`, `BOOLEAN`, dan
 3. M3: planner + tes penempatan + level  -- selesai
 4. M4: FastAPI + halaman web mode teks  -- selesai
 5. M5: voice (Web Speech API)  -- selesai
+   - Migrasi backend FastAPI -> Django (ORM, migrations, admin) + suara tutor Gemini TTS  -- selesai (branch `django`)
 6. M6: deploy ke VPS (PostgreSQL hanya listen di localhost) + uji coba teman sekelas  <- posisi sekarang
    Wajib HTTPS: input suara (SpeechRecognition) hanya jalan di localhost atau HTTPS.
 
