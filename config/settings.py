@@ -13,27 +13,32 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent   # folder proyek (tempat manage.py)
 load_dotenv(BASE_DIR / ".env")
 
-# Vercel mengisi env VERCEL=1 di build & runtime: dipakai untuk menyalakan pengaturan produksi otomatis.
-ON_VERCEL = os.environ.get("VERCEL") == "1"
+# Produksi = backend berjalan di Render (Render mengisi env RENDER=true). Frontend ada di Netlify.
+ON_RENDER = os.environ.get("RENDER") == "true"
 
 # Kunci untuk menandatangani cookie/token (mis. login admin). Di produksi WAJIB diisi lewat env DJANGO_SECRET_KEY:
 # lebih baik aplikasi menolak jalan daripada berjalan dengan kunci yang tertulis di kode publik.
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or ("" if ON_VERCEL else "dev-only-tidak-untuk-produksi")
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or ("" if ON_RENDER else "dev-only-tidak-untuk-produksi")
 if not SECRET_KEY:
     from django.core.exceptions import ImproperlyConfigured
-    raise ImproperlyConfigured("DJANGO_SECRET_KEY wajib diisi di Environment Variables Vercel")
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY wajib diisi di Environment Variables Render")
 
-# DEBUG menampilkan detail error ke pengunjung: nyala di lokal, mati di Vercel (kecuali dinyalakan sengaja)
-DEBUG = os.environ.get("DJANGO_DEBUG", "0" if ON_VERCEL else "1") == "1"
+# DEBUG menampilkan detail error ke pengunjung: nyala di lokal, mati di Render (kecuali dinyalakan sengaja)
+DEBUG = os.environ.get("DJANGO_DEBUG", "0" if ON_RENDER else "1") == "1"
 
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
-# Domain deployment Vercel (preview, cabang, produksi) diizinkan otomatis dari env bawaan Vercel
-ALLOWED_HOSTS += [h for h in (os.environ.get(k) for k in
-                              ("VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL")) if h]
-if ON_VERCEL:
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")   # HTTPS diputus di proxy Vercel
+if os.environ.get("RENDER_EXTERNAL_HOSTNAME"):          # mis. ai-english-tutor-api.onrender.com, diisi Render
+    ALLOWED_HOSTS.append(os.environ["RENDER_EXTERNAL_HOSTNAME"])
+if ON_RENDER:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")   # HTTPS diputus di proxy Render
     SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = True                # cookie login admin hanya lewat HTTPS
     CSRF_TRUSTED_ORIGINS = [f"https://{h}" for h in ALLOWED_HOSTS if h not in ("localhost", "127.0.0.1")]
+
+# CORS: halaman web di Netlify (domain lain) boleh memanggil /api/... di Render.
+# FRONTEND_ORIGINS = alamat situs Netlify, mis. https://ai-english-tutor.netlify.app (pisahkan dengan koma).
+# Di lokal halaman & API satu alamat, jadi CORS tidak dibutuhkan.
+CORS_ALLOWED_ORIGINS = [o.strip().rstrip("/") for o in os.environ.get("FRONTEND_ORIGINS", "").split(",") if o.strip()]
+CORS_URLS_REGEX = r"^/api/.*$"     # hanya API; panel admin tetap hanya dari domain Render sendiri
 
 # "App" = satu paket fitur. Enam yang pertama bawaan Django; "tutor" adalah app kita.
 INSTALLED_APPS = [
@@ -44,12 +49,15 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.postgres",       # fitur khusus PostgreSQL (ArrayField untuk fokus_pola)
+    "corsheaders",                   # izin panggilan lintas domain (Netlify -> Render)
     "tutor",
 ]
 
 # Lapisan yang dilewati setiap request secara berurutan (masuk dari atas, keluar dari bawah)
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",    # sajikan /static/ (CSS admin) dari STATIC_ROOT di produksi
+    "corsheaders.middleware.CorsMiddleware",         # harus sebelum CommonMiddleware
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -97,9 +105,8 @@ USE_I18N = True
 USE_TZ = True                # waktu disimpan UTC di database, ditampilkan dalam TIME_ZONE
 
 # File statis frontend (style.css, app.js) ada di public/static; saat DEBUG, `runserver` menyajikannya
-# di /static/... . Di produksi file ini disajikan CDN (Tahap 5).
+# di /static/... . Di produksi halaman web disajikan Netlify langsung dari public/.
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "public" / "static"]
-# Tujuan `collectstatic`: Vercel menjalankannya otomatis saat build bila STATIC_ROOT diisi,
-# lalu menyajikan isinya (CSS/JS aplikasi + tampilan admin) dari CDN.
+# Tujuan `collectstatic` (dijalankan saat build di Render); WhiteNoise menyajikannya, terutama CSS panel admin.
 STATIC_ROOT = BASE_DIR / "staticfiles"

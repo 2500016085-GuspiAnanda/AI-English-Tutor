@@ -17,4 +17,5 @@ urlpatterns = [
     path("api/sessions/<int:session_id>/end", views.end_session),
     path("api/users/<int:user_id>/memory", views.memory),
     path("api/tts", views.speech),
+    path("api/health", views.health),
 ]

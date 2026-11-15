@@ -279,3 +279,23 @@ def test_tts_hanya_untuk_pemilik_sesi_yang_masih_baru(client, monkeypatch, sesi_
     assert client.post("/api/tts", json={"text": "Hi"}).status_code == 422          # tanpa sesi sama sekali
     Sesi.objects.filter(pk=sesi_tts["session_id"]).update(created_at=Now() - timedelta(hours=7))
     assert client.post("/api/tts", json={"text": "Hi", **sesi_tts}).status_code == 403
+
+
+# --- Deploy: Netlify (halaman) + Render (backend) --------------------------------------------
+
+def test_health_untuk_membangunkan_server(client):
+    r = client.get("/api/health")
+    assert r.status_code == 200 and r.json() == {"ok": True}
+
+
+def test_cors_hanya_mengizinkan_situs_netlify_ke_api():
+    from django.test import Client, override_settings
+    netlify = "https://ai-english-tutor.netlify.app"
+    with override_settings(CORS_ALLOWED_ORIGINS=[netlify]):
+        c = Client(HTTP_HOST="localhost")
+        api = c.options("/api/login", HTTP_ORIGIN=netlify, HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST")
+        assert api["Access-Control-Allow-Origin"] == netlify
+        asing = c.get("/api/health", HTTP_ORIGIN="https://situs-lain.example")
+        assert "Access-Control-Allow-Origin" not in asing
+        admin = c.get("/admin/login/", HTTP_ORIGIN=netlify)
+        assert "Access-Control-Allow-Origin" not in admin      # panel admin tidak dibuka untuk domain lain

@@ -1,0 +1,13 @@
+# Netlify hanya menyajikan halaman web (folder public/). Backend Django berjalan di Render (lihat render.yaml).
+#
+# Isi env API_BASE di Netlify (Site configuration > Environment variables) dengan URL backend Render,
+# mis. https://ai-english-tutor-api.onrender.com. Saat build, alamat itu ditulis ke public/static/config.js.
+[build]
+  publish = "public"
+  command = '''test -n "$API_BASE" || { echo "API_BASE belum diisi di Environment variables Netlify"; exit 1; }; printf 'window.API_BASE = "%s";\n' "$API_BASE" > public/static/config.js'''
+
+# config.js selalu diambil ulang, agar perubahan alamat backend langsung berlaku
+[[headers]]
+  for = "/static/config.js"
+  [headers.values]
+    Cache-Control = "no-cache"

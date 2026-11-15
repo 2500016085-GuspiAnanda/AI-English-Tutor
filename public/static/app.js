@@ -29,14 +29,17 @@ function notice(id, text) { $(id).innerHTML = text ? `${ICON.warn}<span>${escape
 
 // =====================================================================
 // api(): satu pintu untuk semua request ke server (mirip call_llm di Python)
+// API_BASE: alamat backend Django dari static/config.js. Kosong di lokal; di Netlify berisi URL Render.
 // =====================================================================
+const API_BASE = (window.API_BASE || "").replace(/\/+$/, "");
+
 async function api(path, body) {
   const options = body === undefined ? {} : {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   };
-  const res = await fetch(path, options);
+  const res = await fetch(API_BASE + path, options);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const d = data.detail;   // 422 dari Pydantic berupa daftar error; selain itu berupa teks
@@ -515,7 +518,7 @@ async function speakServer(text, hooks, token) {
   if (cached) { done = true; cached.forEach(play); return; }
 
   ttsAbort = new AbortController();
-  const res = await fetch("/api/tts", {
+  const res = await fetch(API_BASE + "/api/tts", {
     method: "POST", headers: { "Content-Type": "application/json" }, signal: ttsAbort.signal,
     body: JSON.stringify({ text, mood: hooks.mood || "netral", persona: hooks.persona || "galak",
                            user_id: state.user?.id, session_id: state.sessionId }),
@@ -1063,5 +1066,24 @@ setupMic();
 renderTtsButton();
 refreshLayout();
 setActivity("idle");
+
+// Backend gratis di Render tidur setelah 15 menit sepi dan butuh ±1 menit untuk bangun.
+// Begitu halaman dibuka, bangunkan dulu; bila lambat, beri tahu pengguna agar tidak dikira error.
+async function wakeServer() {
+  if (!API_BASE) return;                 // lokal: halaman & API satu server, tidak perlu
+  const status = (text) => { $("server-status").textContent = text; };
+  const slow = setTimeout(() => status("Menyambungkan ke server… Server gratis sedang bangun, biasanya ±1 menit."), 2000);
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      if ((await fetch(API_BASE + "/api/health")).ok) break;
+    } catch { /* masih bangun / jaringan putus sesaat */ }
+    await new Promise((r) => setTimeout(r, 4000));
+  }
+  clearTimeout(slow);
+  status("");
+}
+
 const saved = load("username", null);
-if (saved) login(saved).catch(() => show("login")); else show("login");
+wakeServer().then(() => {
+  if (saved) login(saved).catch(() => show("login")); else show("login");
+});

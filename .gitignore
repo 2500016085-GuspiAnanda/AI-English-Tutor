@@ -16,3 +16,6 @@ wheels/
 
 # Hasil collectstatic (dibuat ulang saat build)
 staticfiles/
+
+# Python unduhan uv saat build di Render
+.uv-python/

@@ -25,7 +25,8 @@ Tujuan utama: portofolio belajar agentic AI (tool calling, memori, planner).
 - Django: project `config/` (settings, urls), app `tutor/` (models, views, urls, admin, schemas). TIME_ZONE Asia/Jakarta.
   API JSON di `tutor/views.py` memakai decorator `@api(method, SkemaPydantic)`; panel admin di `/admin/`.
 - Frontend: satu halaman tanpa framework, dipisah jadi `public/index.html` (struktur), `public/static/style.css`
-  (tampilan), `public/static/app.js` (perilaku); di Vercel disajikan CDN, di lokal oleh Django (DEBUG).
+  (tampilan), `public/static/app.js` (perilaku); di produksi disajikan Netlify, di lokal oleh Django (DEBUG).
+  Alamat backend di `public/static/config.js` (kosong = satu alamat; ditulis ulang saat build Netlify dari env API_BASE).
   STT via Web Speech API browser.
 - Suara tutor: Gemini TTS (`tts.py`, `gemini-3.8-flash-tts`, WAJIB API `v1beta`), `GEMINI_API_KEY` di `.env` (opsional).
   Suara Bodi (galak) / Fola (lembut), catatan sutradara per mood. Paket gratis 10 suara/hari: Gemini hanya untuk mood
@@ -90,7 +91,10 @@ Gunakan `GENERATED ALWAYS AS IDENTITY`, `TIMESTAMPTZ`, `BOOLEAN`, dan
 4. M4: FastAPI + halaman web mode teks  -- selesai
 5. M5: voice (Web Speech API)  -- selesai
    - Migrasi backend FastAPI -> Django (ORM, migrations, admin) + suara tutor Gemini TTS  -- selesai (branch `django`)
-6. M6: deploy ke VPS (PostgreSQL hanya listen di localhost) + uji coba teman sekelas  <- posisi sekarang
+6. M6: deploy gratis + uji coba teman sekelas  <- posisi sekarang
+   Halaman: Netlify (`netlify.toml`). Backend Django: Render (`render.yaml`, gunicorn + WhiteNoise, tidur saat sepi;
+   frontend ping /api/health). Database: Neon. Browser memanggil Render langsung (CORS via env FRONTEND_ORIGINS),
+   BUKAN lewat proxy Netlify (batas ±26 detik). Netlify tidak bisa menjalankan Django.
    Wajib HTTPS: input suara (SpeechRecognition) hanya jalan di localhost atau HTTPS.
 
 Output portofolio: repo GitHub publik, README (diagram arsitektur, loop agen,

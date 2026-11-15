@@ -1,0 +1,38 @@
+# Blueprint Render untuk backend Django (API + panel admin + suara Gemini).
+# Halaman web disajikan Netlify (netlify.toml); database PostgreSQL di Neon.
+#
+# Paket gratis Render: server tidur setelah 15 menit sepi dan bangun ±1 menit pada permintaan berikutnya.
+# Frontend menangani ini dengan ping /api/health dan pesan "server sedang bangun".
+services:
+  - type: web
+    name: ai-english-tutor-api
+    runtime: python
+    plan: free
+    region: singapore            # terdekat dari pengguna di Indonesia
+    # uv memasang Python 3.14 + dependensi persis sesuai uv.lock. migrate di sini juga mengisi kurikulum
+    # (data migration 0002), karena paket gratis tidak punya "pre-deploy command".
+    buildCommand: >-
+      pip install uv &&
+      uv sync --frozen --no-dev &&
+      uv run --frozen --no-dev python manage.py collectstatic --noinput &&
+      uv run --frozen --no-dev python manage.py migrate --noinput
+    # gunicorn = server produksi (pengganti runserver). timeout 120 s: satu giliran agen bisa beberapa panggilan LLM.
+    startCommand: uv run --frozen --no-dev gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    healthCheckPath: /api/health
+    envVars:
+      - key: UV_PYTHON_INSTALL_DIR          # Python unduhan uv disimpan di folder proyek agar ikut ke runtime
+        value: .uv-python
+      - key: DJANGO_SECRET_KEY
+        generateValue: true                 # dibuat acak oleh Render
+      - key: DATABASE_URL                   # connection string Neon (dengan ?sslmode=require)
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_BASE_URL
+        value: https://api.deepseek.com
+      - key: DEEPSEEK_MODEL
+        value: deepseek-v4-flash
+      - key: GEMINI_API_KEY                 # opsional: suara tutor berekspresi
+        sync: false
+      - key: FRONTEND_ORIGINS               # URL situs Netlify, mis. https://ai-english-tutor.netlify.app
+        sync: false

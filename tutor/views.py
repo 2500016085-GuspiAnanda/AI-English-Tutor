@@ -139,6 +139,13 @@ def _chat_response(state: ChatState, reply: str, server_ms: int, user_turn: bool
 
 # --- Endpoint ----------------------------------------------------------------------------
 
+@api("GET")
+def health(request):
+    """Ping ringan: dipakai frontend untuk membangunkan server gratis yang tertidur, dan oleh Render
+    untuk memeriksa server sudah siap. Sengaja tidak menyentuh database agar selalu cepat."""
+    return {"ok": True}
+
+
 def home(request):
     """Halaman web (satu halaman HTML + JS). Di Vercel disajikan langsung oleh CDN."""
     return FileResponse(open(PUBLIC_DIR / "index.html", "rb"), content_type="text/html; charset=utf-8")

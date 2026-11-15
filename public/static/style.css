@@ -443,3 +443,7 @@ td { padding: var(--s3) var(--s1); border-bottom: 1px solid var(--line); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Pesan "server sedang bangun" (backend gratis di Render tidur saat sepi) */
+.server-status { margin: var(--s3) 0 0; color: var(--ink-2); font-size: var(--t-1); font-weight: 700; }
+.server-status:empty { display: none; }

@@ -180,8 +180,7 @@ cp .env.example .env            # lalu isi DEEPSEEK_API_KEY, DATABASE_URL, dan (
 # buat database (sesuaikan user/password)
 psql -U postgres -c "CREATE ROLE ai_tutor LOGIN PASSWORD 'password'"
 psql -U postgres -c "CREATE DATABASE ai_english_tutor OWNER ai_tutor"
-uv run python manage.py migrate                  # buat semua tabel dari migration
-psql -U ai_tutor -d ai_english_tutor -f seed.sql # kurikulum 6 topik pemula
+uv run python manage.py migrate                  # buat semua tabel + isi kurikulum 6 topik pemula
 uv run python manage.py createsuperuser          # akun untuk panel admin /admin/
 
 uv run python manage.py runserver                # web: buka http://localhost:8000
@@ -193,10 +192,34 @@ Database lama yang dibuat dari `schema.sql` (sebelum Django) cukup diserahkan se
 
 Input suara hanya berjalan di **Google Chrome** atau **Microsoft Edge**, dan hanya di `localhost` atau HTTPS.
 
+## Deploy (gratis): Netlify + Render + Neon
+
+```
+Browser ──► Netlify : halaman web (public/), HTTPS → mikrofon jalan
+   └──────► Render  : backend Django (API, panel admin, suara Gemini)
+               └──► Neon : PostgreSQL
+```
+
+Netlify tidak bisa menjalankan Django (hanya situs statis + function JS/TS/Go), jadi backend berjalan di Render.
+Browser memanggil backend **langsung** (izin CORS untuk domain Netlify), bukan lewat proxy Netlify: proxy
+memutus permintaan yang belum menjawab dalam ±26 detik, padahal server gratis Render yang tertidur butuh ±1 menit
+untuk bangun. Saat halaman dibuka, frontend memanggil `/api/health` untuk membangunkannya dan menampilkan
+pesan "server sedang bangun".
+
+1. **Neon**: buat project PostgreSQL, salin connection string (berakhiran `?sslmode=require`).
+2. **Render**: New → Blueprint → pilih repo ini; [render.yaml](render.yaml) dibaca otomatis. Isi env yang diminta:
+   `DATABASE_URL` (Neon), `DEEPSEEK_API_KEY`, `GEMINI_API_KEY` (opsional), dan `FRONTEND_ORIGINS` (URL Netlify,
+   bisa diisi setelah langkah 3). Build menjalankan `migrate`, yang sekaligus mengisi kurikulum (data migration).
+3. **Netlify**: Add new site → import repo ini; [netlify.toml](netlify.toml) dibaca otomatis. Isi env `API_BASE`
+   dengan URL Render (mis. `https://ai-english-tutor-api.onrender.com`), lalu deploy.
+4. Isi `FRONTEND_ORIGINS` di Render dengan URL Netlify, lalu redeploy Render.
+5. Akun panel admin: paket gratis Render tidak punya shell, jadi jalankan dari komputer sendiri dengan database Neon:
+   `DATABASE_URL="<connection string Neon>" uv run python manage.py createsuperuser`, lalu buka `https://<render>/admin/`.
+
 ## Tes
 
 ```bash
-uv run pytest                                  # 75 tes, ~3 detik, tanpa memanggil DeepSeek/Gemini
+uv run pytest                                  # 77 tes, ~3 detik, tanpa memanggil DeepSeek/Gemini
 RUN_LIVE=1 uv run pytest tests/test_live.py    # tes perilaku model ke DeepSeek sungguhan (berbayar)
 ```
 
@@ -225,11 +248,14 @@ manage.py        perintah Django (runserver, migrate, createsuperuser, ...)
 config/          project Django: settings.py, urls.py
 tutor/           app Django: models, views (API), urls, admin, schemas (Pydantic), migrations,
                  management/commands/adopt_legacy_db.py
-public/          halaman web tanpa framework: index.html, static/style.css, static/app.js
-seed.sql         kurikulum pemula
+public/          halaman web tanpa framework: index.html, static/style.css, static/app.js,
+                 static/config.js (alamat backend; ditulis ulang saat build di Netlify)
+netlify.toml     deploy halaman web ke Netlify
+render.yaml      deploy backend Django ke Render (gunicorn + WhiteNoise)
+seed.sql         kurikulum pemula (kini juga diisi otomatis oleh data migration 0002)
 schema.sql       skema awal (referensi; skema kini dikelola migration Django)
 spike_m1.py      uji awal tool calling DeepSeek
-tests/           75 tes pytest (unit, database, API + loop agen dengan LLM tiruan, admin) + tes live
+tests/           77 tes pytest (unit, database, API + loop agen dengan LLM tiruan, admin) + tes live
 ```
 
 ## Keputusan desain dan batasan
@@ -242,7 +268,7 @@ tests/           75 tes pytest (unit, database, API + loop agen dengan LLM tirua
 - **Planner punya rencana cadangan deterministik**: jika output LLM tidak valid, sesi tetap berjalan.
 - **Server stateless.** Percakapan yang sedang berjalan disimpan di kolom `sessions.state` (JSONB), bukan di memori:
   tiap request memuat state, menjalankan satu giliran, lalu menyimpannya lagi. Sesi tetap bertahan walau server
-  restart, dan aplikasi bisa berjalan di platform serverless (Vercel) dengan banyak instance sekaligus.
+  restart, dan backend bisa dijalankan beberapa instance sekaligus.
 - **Kunci sesi di database** (`sessions.busy_until`): dua pesan yang dikirim bersamaan ke satu sesi tidak saling
   menimpa; pesan kedua ditolak dengan 409. Kunci punya batas waktu, jadi lepas sendiri bila server mati di tengah proses.
 - **Login hanya username** (tanpa password) sesuai cakupan MVP. Batas 3 sesi per hari (dihitung dalam WIB) per pengguna.
@@ -259,4 +285,4 @@ tests/           75 tes pytest (unit, database, API + loop agen dengan LLM tirua
 - [x] M4 FastAPI + halaman web
 - [x] M5 Suara (Web Speech API)
 - [x] Migrasi backend ke Django (ORM, migrations, panel admin) + suara tutor Gemini TTS
-- [ ] M6 Deploy ke VPS (HTTPS, PostgreSQL hanya di localhost) + uji coba dengan teman sekelas
+- [ ] M6 Deploy gratis (Netlify + Render + Neon) + uji coba dengan teman sekelas
