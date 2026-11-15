@@ -128,7 +128,7 @@ def agent_step(ctx: SessionContext, messages: list[dict], debug: bool = False) -
         usage = resp.usage
         messages.append(_assistant_dict(msg))
         stored = msg.content or json.dumps(messages[-1].get("tool_calls", []), ensure_ascii=False)
-        db.save_message(ctx.conn, ctx.session_id, "assistant", stored, resp.model, usage.completion_tokens if usage else None)
+        db.save_message(ctx.session_id, "assistant", stored, resp.model, usage.completion_tokens if usage else None)
         if debug and usage:
             hit = getattr(usage, "prompt_cache_hit_tokens", None)
             print(f"   [tokens] prompt={usage.prompt_tokens} cache_hit={hit} completion={usage.completion_tokens}")
@@ -142,7 +142,7 @@ def agent_step(ctx: SessionContext, messages: list[dict], debug: bool = False) -
             if debug:
                 print(f"   [tool] {tc.function.name}({tc.function.arguments}) -> {result}")
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
-            db.save_message(ctx.conn, ctx.session_id, "tool", result)
+            db.save_message(ctx.session_id, "tool", result)
     return "(agen berhenti: terlalu banyak pemanggilan tool dalam satu giliran)"
 
 
@@ -169,7 +169,7 @@ class ChatState:
     @classmethod
     def from_json(cls, data: dict, user_id: int, session_id: int) -> "ChatState":
         ctx = SessionContext(
-            conn=None, user_id=user_id, session_id=session_id, persona=data["persona"],
+            user_id=user_id, session_id=session_id, persona=data["persona"],
             failed=set(data["failed"]), correct=set(data["correct"]),
             ended=data["ended"], ringkasan=data["ringkasan"],
         )
@@ -178,7 +178,7 @@ class ChatState:
 
 def _exchange(state: ChatState, text: str, debug: bool) -> str:
     state.messages.append({"role": "user", "content": text})
-    db.save_message(state.ctx.conn, state.ctx.session_id, "user", text)
+    db.save_message(state.ctx.session_id, "user", text)
     return agent_step(state.ctx, state.messages, debug)
 
 

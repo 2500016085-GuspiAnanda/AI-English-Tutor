@@ -13,3 +13,6 @@ wheels/
 .env
 
 .vercel
+
+# Hasil collectstatic (dibuat ulang saat build)
+staticfiles/

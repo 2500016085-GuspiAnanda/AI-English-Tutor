@@ -47,25 +47,25 @@ def test_skema_tool_lengkap():
 
 
 def test_error_validasi_dikembalikan_ke_agen_bukan_crash():
-    ctx = SessionContext(conn=None, user_id=1, session_id=1)
+    ctx = SessionContext(user_id=1, session_id=1)
     out = json.loads(execute_tool(ctx, "save_mistake", '{"kalimat_asli": "x"}'))
     assert out["error"] == "argumen tidak valid"
     assert ctx.turn_mistakes == 0
 
 
 def test_tool_tidak_dikenal():
-    ctx = SessionContext(conn=None, user_id=1, session_id=1)
+    ctx = SessionContext(user_id=1, session_id=1)
     assert "tidak dikenal" in json.loads(execute_tool(ctx, "hapus_semua", "{}"))["error"]
 
 
 def test_get_error_log_menolak_pengguna_lain():
-    ctx = SessionContext(conn=None, user_id=7, session_id=1)
+    ctx = SessionContext(user_id=7, session_id=1)
     out = json.loads(execute_tool(ctx, "get_error_log", '{"user_id": 8}'))
     assert "error" in out and out["user_id"] == 7
 
 
 def test_mark_progress_benar_tidak_menyentuh_db():
-    ctx = SessionContext(conn=None, user_id=1, session_id=1)   # conn=None: kalau DB disentuh, tes gagal
+    ctx = SessionContext(user_id=1, session_id=1)
     execute_tool(ctx, "mark_progress", '{"pola": "To Be", "benar": true}')
     assert ctx.correct == {"to be"} and ctx.turn_correct == 1
 
@@ -80,13 +80,13 @@ def test_mark_progress_benar_tidak_menyentuh_db():
     ("galak", 0, 0, False, "netral"),      # sapaan pembuka / penutup
 ])
 def test_mood(persona, mistakes, correct, user_turn, expected):
-    ctx = SessionContext(conn=None, user_id=1, session_id=1, persona=persona)
+    ctx = SessionContext(user_id=1, session_id=1, persona=persona)
     ctx.turn_mistakes, ctx.turn_correct = mistakes, correct
     assert ctx.mood(user_turn) == expected
 
 
 def test_new_turn_mereset_catatan_giliran():
-    ctx = SessionContext(conn=None, user_id=1, session_id=1)
+    ctx = SessionContext(user_id=1, session_id=1)
     ctx.turn_mistakes, ctx.turn_tools, ctx.turn_corrections = 2, ["save_mistake"], [{"x": 1}]
     ctx.new_turn()
     assert (ctx.turn_mistakes, ctx.turn_tools, ctx.turn_corrections) == (0, [], [])
@@ -94,13 +94,13 @@ def test_new_turn_mereset_catatan_giliran():
 
 def test_chatstate_serialisasi_bolak_balik_tanpa_kehilangan_data():
     from agent import ChatState
-    ctx = SessionContext(conn=None, user_id=4, session_id=9, persona="lembut",
+    ctx = SessionContext(user_id=4, session_id=9, persona="lembut",
                          failed={"to be"}, correct={"plural", "article"}, ended=True, ringkasan="ok")
     original = ChatState(ctx=ctx, messages=[{"role": "system", "content": "x"}], turn=3, closed=False)
     data = json.loads(json.dumps(original.to_json()))      # lewat JSON sungguhan, seperti ke kolom JSONB
     back = ChatState.from_json(data, user_id=4, session_id=9)
     assert back.to_json() == original.to_json()
-    assert back.ctx.failed == {"to be"} and back.ctx.persona == "lembut" and back.ctx.conn is None
+    assert back.ctx.failed == {"to be"} and back.ctx.persona == "lembut"
 
 
 # --- Planner ------------------------------------------------------------------------------
@@ -165,3 +165,15 @@ def test_catatan_web_hanya_di_web_dan_tidak_menyebut_koreksi_otomatis():
     assert WEB_UI_NOTE not in build_dynamic_prompt(USER, None, "x", ["a"], [], [])
     # Regresi: kalimat "koreksi tampil otomatis" pernah membuat model berhenti memanggil save_mistake.
     assert "otomatis" not in WEB_UI_NOTE.lower()
+
+
+def test_naskah_tts_memisahkan_catatan_sutradara_dari_transkrip():
+    import tts
+    galak = tts.script("Itu salah.", "marah", "galak")
+    assert galak.index("## Director's notes:") < galak.index("## Transcript:")
+    assert "kesal" in galak and galak.rstrip().endswith("<sigh> Itu salah.")
+    lembut = tts.script("Hampir benar.", "koreksi", "lembut")
+    assert "hangat" in lembut and "<sigh>" not in lembut
+    # mood tanpa catatan khusus jatuh ke catatan netral gaya itu; gaya tak dikenal jatuh ke galak
+    assert "tidak sedang kesal" in tts.script("Halo.", "aneh", "galak")
+    assert tts.script("Halo.", "netral", "x") == tts.script("Halo.", "netral", "galak")

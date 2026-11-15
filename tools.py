@@ -57,7 +57,6 @@ MODELS = {"save_mistake": SaveMistake, "get_error_log": GetErrorLog, "mark_progr
 
 @dataclass
 class SessionContext:
-    conn: object
     user_id: int
     session_id: int
     failed: set[str] = field(default_factory=set)   # pola yang salah di sesi ini
@@ -103,8 +102,8 @@ def execute_tool(ctx: SessionContext, name: str, arguments: str) -> str:
         return _out(error="argumen tidak valid", detail=e.errors(include_url=False, include_context=False))
 
     if isinstance(args, SaveMistake):
-        mid = db.insert_mistake(ctx.conn, ctx.user_id, ctx.session_id, args.kalimat_asli, args.kalimat_benar, args.kategori, args.pola)
-        db.record_pattern_failure(ctx.conn, ctx.user_id, args.pola)
+        mid = db.insert_mistake(ctx.user_id, ctx.session_id, args.kalimat_asli, args.kalimat_benar, args.kategori, args.pola)
+        db.record_pattern_failure(ctx.user_id, args.pola)
         ctx.failed.add(args.pola)
         ctx.turn_mistakes += 1
         ctx.turn_corrections.append(args.model_dump())
@@ -113,26 +112,26 @@ def execute_tool(ctx: SessionContext, name: str, arguments: str) -> str:
     if isinstance(args, GetErrorLog):
         if args.user_id != ctx.user_id:
             return _out(error="hanya boleh membaca error log pengguna yang sedang aktif", user_id=ctx.user_id)
-        return _out(ok=True, mistakes=db.get_error_log(ctx.conn, ctx.user_id))
+        return _out(ok=True, mistakes=db.get_error_log(ctx.user_id))
 
     if isinstance(args, MarkProgress):
         if args.benar:
             ctx.correct.add(args.pola)  # streak baru dihitung di finalize_progress (sekali per sesi)
             ctx.turn_correct += 1
         elif args.pola not in ctx.failed:
-            db.record_pattern_failure(ctx.conn, ctx.user_id, args.pola)
+            db.record_pattern_failure(ctx.user_id, args.pola)
             ctx.failed.add(args.pola)
         return _out(ok=True)
 
     if isinstance(args, EndSession):
-        db.end_session(ctx.conn, ctx.session_id, args.ringkasan)
+        db.end_session(ctx.session_id, args.ringkasan)
         ctx.ended, ctx.ringkasan = True, args.ringkasan
         return _out(ok=True)
 
 
 def finalize_progress(ctx: SessionContext) -> list[dict]:
     """Naikkan streak untuk pola yang benar dan tidak pernah salah di sesi ini."""
-    return [db.record_pattern_success(ctx.conn, ctx.user_id, p) for p in sorted(ctx.correct - ctx.failed)]
+    return [db.record_pattern_success(ctx.user_id, p) for p in sorted(ctx.correct - ctx.failed)]
 
 
 def _out(**kw) -> str:

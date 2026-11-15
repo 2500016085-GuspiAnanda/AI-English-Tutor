@@ -88,11 +88,11 @@ def _check(plan: Plan, user: dict, topics: list[dict]) -> Plan:
     return plan
 
 
-def plan_session(conn, user: dict, debug: bool = False) -> tuple[Plan, dict | None, list[dict], list[dict]]:
+def plan_session(user: dict, debug: bool = False) -> tuple[Plan, dict | None, list[dict], list[dict]]:
     """Kembalikan (plan, topic_row_atau_None, progress, errors)."""
-    topics = db.list_topics_with_history(conn, user["id"], user["level"]) if user["level"] == "pemula" else []
-    progress = db.get_pattern_progress(conn, user["id"])
-    errors = db.get_error_log(conn, user["id"], limit=10)
+    topics = db.list_topics_with_history(user["id"], user["level"]) if user["level"] == "pemula" else []
+    progress = db.get_pattern_progress(user["id"])
+    errors = db.get_error_log(user["id"], limit=10)
 
     messages = [
         {"role": "system", "content": STATIC_PROMPT},

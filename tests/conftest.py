@@ -9,16 +9,39 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-import db
+import db  # noqa: F401  (import db menyiapkan Django sebelum model dipakai)
+from tutor.models import Pelajar
 
 PREFIX = "pytest_"
 
 
+class JsonClient:
+    """Pembungkus django.test.Client agar tes memanggil API seperti sebelumnya: client.post(url, json={...}).
+
+    Request diproses lengkap oleh Django (urls -> view -> database) tanpa menyalakan server sungguhan.
+    """
+
+    def __init__(self):
+        from django.test import Client
+        self._client = Client(HTTP_HOST="localhost")   # host harus ada di ALLOWED_HOSTS
+
+    def get(self, url):
+        return self._client.get(url)
+
+    def post(self, url, json=None):
+        return self._client.post(url, data={} if json is None else json, content_type="application/json")
+
+
+@pytest.fixture(scope="module")
+def client():
+    return JsonClient()
+
+
 @pytest.fixture
-def conn():
-    with db.connect() as c:
-        yield c
-        c.execute("DELETE FROM users WHERE username LIKE %s", (PREFIX + "%",))
+def bersihkan():
+    """Hapus semua pengguna buatan tes setelah tes selesai (sesi, pesan, kesalahan ikut terhapus: DB_CASCADE)."""
+    yield
+    Pelajar.objects.filter(username__startswith=PREFIX).delete()
 
 
 # --- LLM tiruan ---------------------------------------------------------------------------

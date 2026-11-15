@@ -3,21 +3,18 @@
 Alur nyata dari request HTTP sampai ke database diuji, tanpa memanggil DeepSeek.
 """
 
+from datetime import timedelta
+
 import pytest
-from fastapi.testclient import TestClient
+
+from django.db.models.functions import Now
 
 import db
-from app import app
 from tests.conftest import PREFIX, llm_text, llm_tools
+from tutor.models import Pesan, Sesi
 
 MISTAKE = {"kalimat_asli": "I go to campus yesterday", "kalimat_benar": "I went to campus yesterday",
            "kategori": "grammar", "pola": "Simple Past"}
-
-
-@pytest.fixture(scope="module")
-def client():
-    with TestClient(app) as c:   # menjalankan lifespan: membuka connection pool
-        yield c
 
 
 def login(client, name, placement=True, persona=None):
@@ -42,7 +39,7 @@ def say(client, uid, sid, text):
 
 # --- Login, tes penempatan, gaya mentor -------------------------------------------------
 
-def test_alur_login_dan_tes_penempatan(client, conn):
+def test_alur_login_dan_tes_penempatan(client, bersihkan):
     uid = login(client, "api_a", placement=False)
     assert client.post("/api/sessions", json={"user_id": uid}).status_code == 409   # belum tes
     bad = client.post("/api/placement", json={"user_id": uid, "answers": ["a", "z"]})
@@ -62,7 +59,7 @@ def test_username_tidak_valid_ditolak(client, username):
     assert client.post("/api/login", json={"username": username}).status_code == 422
 
 
-def test_gaya_mentor(client, conn):
+def test_gaya_mentor(client, bersihkan):
     uid = login(client, "api_persona")
     assert client.post("/api/persona", json={"user_id": uid, "persona": "marah"}).status_code == 422
     assert client.post("/api/persona", json={"user_id": uid, "persona": "lembut"}).status_code == 200
@@ -71,14 +68,14 @@ def test_gaya_mentor(client, conn):
 
 def test_halaman_dan_file_statis_tersaji(client):
     for path, kind in [("/", "text/html"), ("/static/style.css", "text/css"), ("/static/app.js", "javascript")]:
-        # lokal disajikan FastAPI dari public/; di Vercel file yang sama disajikan CDN
+        # lokal disajikan Django dari public/; di Vercel file yang sama disajikan CDN
         r = client.get(path)
         assert r.status_code == 200 and kind in r.headers["content-type"]
 
 
 # --- Loop agen ----------------------------------------------------------------------------
 
-def test_sesi_penuh_salah_lalu_rekap(client, conn, fake_llm):
+def test_sesi_penuh_salah_lalu_rekap(client, bersihkan, fake_llm):
     uid = login(client, "api_full")
     s = start(client, uid, fake_llm)
     assert (s["mood"], s["topik"], s["persona"], s["fokus_pola"]) == ("netral", "Perkenalan diri", "galak", ["to be"])
@@ -100,16 +97,15 @@ def test_sesi_penuh_salah_lalu_rekap(client, conn, fake_llm):
     fake_llm.queue += [llm_tools(("end_session", {"ringkasan": "1 kesalahan: simple past."})), llm_text("Bye!")]
     end = client.post(f"/api/sessions/{s['session_id']}/end", json={"user_id": uid}).json()
     assert end["selesai"] is True and end["ringkasan"] == "1 kesalahan: simple past."
-    assert db.load_chat_state(conn, s["session_id"])["state"]["closed"] is True
+    assert db.load_chat_state(s["session_id"])["state"]["closed"] is True
     assert say(client, uid, s["session_id"], "hi").status_code == 404   # sesi selesai tidak bisa dilanjutkan
 
     # Riwayat percakapan tersimpan di tabel messages
-    roles = [m["role"] for m in conn.execute(
-        "SELECT role FROM messages WHERE session_id = %s ORDER BY id", (s["session_id"],)).fetchall()]
+    roles = list(Pesan.objects.filter(session_id=s["session_id"]).order_by("id").values_list("role", flat=True))
     assert roles.count("tool") == 2 and roles[0] == "user"
 
 
-def test_gaya_lembut_saat_salah_berekspresi_koreksi(client, conn, fake_llm):
+def test_gaya_lembut_saat_salah_berekspresi_koreksi(client, bersihkan, fake_llm):
     uid = login(client, "api_lembut", persona="lembut")
     s = start(client, uid, fake_llm)
     assert s["persona"] == "lembut"
@@ -118,7 +114,7 @@ def test_gaya_lembut_saat_salah_berekspresi_koreksi(client, conn, fake_llm):
     assert say(client, uid, s["session_id"], "I go to campus yesterday").json()["mood"] == "koreksi"
 
 
-def test_kalimat_benar_berekspresi_senang(client, conn, fake_llm):
+def test_kalimat_benar_berekspresi_senang(client, bersihkan, fake_llm):
     uid = login(client, "api_benar")
     s = start(client, uid, fake_llm)
     fake_llm.queue.append(llm_text("Perfect sentence!"))
@@ -126,7 +122,7 @@ def test_kalimat_benar_berekspresi_senang(client, conn, fake_llm):
     assert r["mood"] == "senang" and r["koreksi"] == []
 
 
-def test_argumen_tool_salah_dikembalikan_ke_agen_lalu_sesi_lanjut(client, conn, fake_llm):
+def test_argumen_tool_salah_dikembalikan_ke_agen_lalu_sesi_lanjut(client, bersihkan, fake_llm):
     uid = login(client, "api_badtool")
     s = start(client, uid, fake_llm)
     fake_llm.queue += [llm_tools(("save_mistake", MISTAKE | {"kategori": "spelling"})), llm_text("Let's go on.")]
@@ -136,7 +132,7 @@ def test_argumen_tool_salah_dikembalikan_ke_agen_lalu_sesi_lanjut(client, conn, 
     assert "argumen tidak valid" in tool_result["content"]   # agen melihat error-nya
 
 
-def test_streak_naik_saat_pola_benar_lalu_sesi_ditutup(client, conn, fake_llm):
+def test_streak_naik_saat_pola_benar_lalu_sesi_ditutup(client, bersihkan, fake_llm):
     uid = login(client, "api_streak")
     s = start(client, uid, fake_llm)
     fake_llm.queue += [llm_tools(("mark_progress", {"pola": "to be", "benar": True})), llm_text("Nice!")]
@@ -146,7 +142,7 @@ def test_streak_naik_saat_pola_benar_lalu_sesi_ditutup(client, conn, fake_llm):
     assert [(p["pola"], p["streak_benar"]) for p in end["progres"]] == [("to be", 1)]
 
 
-def test_sesi_otomatis_selesai_setelah_10_giliran(client, conn, fake_llm):
+def test_sesi_otomatis_selesai_setelah_10_giliran(client, bersihkan, fake_llm):
     uid = login(client, "api_10")
     s = start(client, uid, fake_llm)
     for _ in range(9):
@@ -156,7 +152,7 @@ def test_sesi_otomatis_selesai_setelah_10_giliran(client, conn, fake_llm):
     assert (r["turn"], r["selesai"], r["ringkasan"]) == (10, True, "10 giliran")
 
 
-def test_planner_ngawur_tetap_bisa_mulai_sesi(client, conn, fake_llm):
+def test_planner_ngawur_tetap_bisa_mulai_sesi(client, bersihkan, fake_llm):
     uid = login(client, "api_planner")
     fake_llm.plan = "ini bukan JSON"
     s = start(client, uid, fake_llm)
@@ -165,12 +161,12 @@ def test_planner_ngawur_tetap_bisa_mulai_sesi(client, conn, fake_llm):
 
 # --- Stateless: state di database, bukan di memori server ---------------------------------
 
-def test_state_sesi_tersimpan_di_database(client, conn, fake_llm):
+def test_state_sesi_tersimpan_di_database(client, bersihkan, fake_llm):
     uid = login(client, "api_state")
     s = start(client, uid, fake_llm)
     fake_llm.queue.append(llm_text("Nice."))
     say(client, uid, s["session_id"], "My name is Budi.")
-    state = db.load_chat_state(conn, s["session_id"])["state"]
+    state = db.load_chat_state(s["session_id"])["state"]
     assert state["turn"] == 1 and state["closed"] is False
     assert [m["role"] for m in state["messages"]][:2] == ["system", "user"]
     # Riwayat dari DB benar-benar dikirim lagi ke LLM di giliran berikutnya
@@ -178,44 +174,108 @@ def test_state_sesi_tersimpan_di_database(client, conn, fake_llm):
     assert any(m.get("content") == "My name is Budi." for m in fake_llm.calls[-1])
 
 
-def test_kunci_sesi_menolak_pesan_bersamaan(client, conn, fake_llm):
+def test_kunci_sesi_menolak_pesan_bersamaan(client, bersihkan, fake_llm):
     uid = login(client, "api_lock")
     s = start(client, uid, fake_llm)
-    assert db.try_lock_session(conn, s["session_id"])       # seolah request lain sedang memproses
+    assert db.try_lock_session(s["session_id"])       # seolah request lain sedang memproses
     assert say(client, uid, s["session_id"], "hi").status_code == 409
-    db.unlock_session(conn, s["session_id"])
+    db.unlock_session(s["session_id"])
     assert say(client, uid, s["session_id"], "hi").status_code == 200
-    assert conn.execute("SELECT busy_until FROM sessions WHERE id = %s",
-                        (s["session_id"],)).fetchone()["busy_until"] is None   # kunci dilepas setelah selesai
+    assert Sesi.objects.get(pk=s["session_id"]).busy_until is None   # kunci dilepas setelah selesai
 
 
-def test_kunci_kedaluwarsa_tidak_membuat_sesi_macet(client, conn, fake_llm):
+def test_kunci_kedaluwarsa_tidak_membuat_sesi_macet(client, bersihkan, fake_llm):
     uid = login(client, "api_stale")
     s = start(client, uid, fake_llm)
     # Simulasi server mati di tengah proses: kunci tertinggal tetapi sudah lewat waktunya
-    conn.execute("UPDATE sessions SET busy_until = now() - interval '1 second' WHERE id = %s", (s["session_id"],))
+    Sesi.objects.filter(pk=s["session_id"]).update(busy_until=Now() - timedelta(seconds=1))
     assert say(client, uid, s["session_id"], "hi").status_code == 200
 
 
 # --- Keamanan & batas ---------------------------------------------------------------------
 
-def test_sesi_orang_lain_403_dan_sesi_hilang_404(client, conn, fake_llm):
+def test_sesi_orang_lain_403_dan_sesi_hilang_404(client, bersihkan, fake_llm):
     uid = login(client, "api_owner")
     s = start(client, uid, fake_llm)
     assert say(client, uid + 999, s["session_id"], "hi").status_code == 403
     assert say(client, uid, 987654, "hi").status_code == 404
 
 
-def test_batas_3_sesi_per_hari(client, conn, fake_llm):
+def test_batas_3_sesi_per_hari(client, bersihkan, fake_llm):
     uid = login(client, "api_limit")
     for _ in range(3):
-        db.create_session(conn, uid, None, "interview magang", [])
+        db.create_session(uid, None, "interview magang", [])
     r = client.post("/api/sessions", json={"user_id": uid})
     assert r.status_code == 429
 
 
-def test_pesan_kosong_atau_terlalu_panjang_ditolak(client, conn, fake_llm):
+def test_pesan_kosong_atau_terlalu_panjang_ditolak(client, bersihkan, fake_llm):
     uid = login(client, "api_len")
     s = start(client, uid, fake_llm)
     assert say(client, uid, s["session_id"], "").status_code == 422
     assert say(client, uid, s["session_id"], "a" * 1001).status_code == 422
+
+
+# --- Suara tutor (Gemini TTS, ditiru agar tes gratis) -------------------------------------
+
+@pytest.fixture
+def sesi_tts(bersihkan):
+    """Pelajar + sesi miliknya: /api/tts hanya melayani pemilik sesi yang masih baru."""
+    uid = db.get_or_create_user(PREFIX + "tts")["id"]
+    return {"user_id": uid, "session_id": db.create_session(uid, None, "interview magang", [])}
+
+
+def test_tts_tanpa_key_503_agar_browser_memakai_suara_cadangan(client, monkeypatch, sesi_tts):
+    monkeypatch.setattr("tts.available", lambda: False)
+    assert client.post("/api/tts", json={"text": "Hi", **sesi_tts}).status_code == 503
+
+
+def test_tts_mengalirkan_audio_dan_meneruskan_mood_dan_gaya(client, monkeypatch, sesi_tts):
+    diterima = {}
+
+    def fake_stream(text, mood, persona):
+        diterima.update(text=text, mood=mood, persona=persona)
+        yield b"\x01\x00"
+        yield b"\x02\x00"
+
+    monkeypatch.setattr("tts.available", lambda: True)
+    monkeypatch.setattr("tts.stream_speech", fake_stream)
+    r = client.post("/api/tts", json={"text": "Stop. Itu salah.", "mood": "marah", "persona": "galak", **sesi_tts})
+    assert r.status_code == 200 and r["Content-Type"].startswith("audio/L16")
+    assert b"".join(r.streaming_content) == b"\x01\x00\x02\x00"
+    assert diterima == {"text": "Stop. Itu salah.", "mood": "marah", "persona": "galak"}
+
+
+def test_tts_layanan_gagal_502_bukan_audio_kosong(client, monkeypatch, sesi_tts):
+    def rusak(text, mood, persona):
+        raise RuntimeError("layanan error")
+        yield  # noqa: menjadikannya generator
+
+    monkeypatch.setattr("tts.available", lambda: True)
+    monkeypatch.setattr("tts.stream_speech", rusak)
+    assert client.post("/api/tts", json={"text": "Hi", **sesi_tts}).status_code == 502
+
+
+def test_tts_kuota_habis_429_agar_browser_berhenti_mencoba(client, monkeypatch, sesi_tts):
+    import tts
+
+    def habis(text, mood, persona):
+        raise tts.QuotaExceeded("429 RESOURCE_EXHAUSTED")
+        yield  # noqa: menjadikannya generator
+
+    monkeypatch.setattr("tts.available", lambda: True)
+    monkeypatch.setattr("tts.stream_speech", habis)
+    r = client.post("/api/tts", json={"text": "Hi", **sesi_tts})
+    assert r.status_code == 429 and "kuota" in r.json()["detail"]
+
+
+def test_tts_hanya_untuk_pemilik_sesi_yang_masih_baru(client, monkeypatch, sesi_tts):
+    """Kuota Gemini terbatas: orang lain, sesi tak dikenal, atau sesi lama tidak boleh memakainya."""
+    monkeypatch.setattr("tts.available", lambda: True)
+    monkeypatch.setattr("tts.stream_speech", lambda text, mood, persona: iter([b"\x00\x00"]))
+    lain = {**sesi_tts, "user_id": sesi_tts["user_id"] + 999}
+    assert client.post("/api/tts", json={"text": "Hi", **lain}).status_code == 403
+    assert client.post("/api/tts", json={"text": "Hi", **sesi_tts, "session_id": 987654}).status_code == 404
+    assert client.post("/api/tts", json={"text": "Hi"}).status_code == 422          # tanpa sesi sama sekali
+    Sesi.objects.filter(pk=sesi_tts["session_id"]).update(created_at=Now() - timedelta(hours=7))
+    assert client.post("/api/tts", json={"text": "Hi", **sesi_tts}).status_code == 403

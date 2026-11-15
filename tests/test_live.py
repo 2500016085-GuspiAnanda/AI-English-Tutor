@@ -10,9 +10,7 @@ sehingga kesalahan pengguna tidak tersimpan. Tes ini memastikan itu tidak terula
 import os
 
 import pytest
-from fastapi.testclient import TestClient
 
-from app import app
 from tests.conftest import PREFIX
 
 pytestmark = pytest.mark.skipif(os.environ.get("RUN_LIVE") != "1", reason="tes live: set RUN_LIVE=1")
@@ -20,14 +18,8 @@ pytestmark = pytest.mark.skipif(os.environ.get("RUN_LIVE") != "1", reason="tes l
 WRONG = "Yesterday I go to the market and I buyed some fruits."
 
 
-@pytest.fixture(scope="module")
-def client():
-    with TestClient(app) as c:
-        yield c
-
-
 @pytest.mark.parametrize("persona, expected_mood", [("galak", "marah"), ("lembut", "koreksi")])
-def test_model_memanggil_save_mistake_untuk_kalimat_salah(client, conn, persona, expected_mood):
+def test_model_memanggil_save_mistake_untuk_kalimat_salah(client, bersihkan, persona, expected_mood):
     uid = client.post("/api/login", json={"username": f"{PREFIX}live_{persona}"}).json()["id"]
     client.post("/api/placement", json={"user_id": uid, "answers": None})
     client.post("/api/persona", json={"user_id": uid, "persona": persona})
