@@ -6,7 +6,7 @@
 <title>AI English Tutor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Caveat:wght@600;700&family=JetBrains+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -14,11 +14,11 @@
 <main id="main">
   <header class="appbar">
     <h1>
-      <svg viewBox="0 0 200 170" aria-hidden="true">
-        <path d="M58 38 C96 30 140 31 162 41 C176 62 178 110 167 137 C130 149 72 150 37 139 C26 112 25 66 39 43 Z"
-              fill="#fff" stroke="#0f2a3d" stroke-width="12"/>
-        <circle cx="77" cy="86" r="11" fill="#0f2a3d"/><circle cx="124" cy="86" r="11" fill="#0f2a3d"/>
-        <path d="M80 112 q21 18 42 0" fill="none" stroke="#c2382d" stroke-width="11" stroke-linecap="round"/>
+      <svg class="tface" viewBox="0 0 200 170" aria-hidden="true">
+        <path class="head" d="M58 38 C96 30 140 31 162 41 C176 62 178 110 167 137 C130 149 72 150 37 139 C26 112 25 66 39 43 Z"/>
+        <ellipse class="eye" cx="77" cy="84" rx="15" ry="17"/><ellipse class="eye" cx="124" cy="84" rx="15" ry="17"/>
+        <g class="pupils"><circle class="pupil" cx="80" cy="86" r="7"/><circle class="pupil" cx="127" cy="86" r="7"/></g>
+        <path class="stroke" d="M84 117 q16 12 32 0"/>
       </svg>
       AI English Tutor
     </h1>
@@ -26,118 +26,228 @@
   </header>
 
   <!-- ===== Layar 1: Masuk ===== -->
-  <section id="screen-login" aria-labelledby="h-login">
-    <div class="hero">
-      <p class="headline" id="h-login" role="heading" aria-level="2">Ngomong bahasa Inggris, langsung dikoreksi.</p>
+  <section id="screen-login" class="login" aria-labelledby="h-login">
+    <div class="login-copy">
+      <p class="tag">✦ Gratis · tanpa password</p>
+      <h2 class="headline" id="h-login">Ngomong bahasa Inggris, langsung <mark>dikoreksi</mark>.</h2>
       <p class="lede">Tutor AI mendengar kalimatmu, mencoret yang salah, lalu mengingatnya untuk dilatih lagi di sesi berikutnya.</p>
+      <form id="login-form" class="card login-card" novalidate>
+        <label class="field" for="username">Username</label>
+        <div class="row">
+          <input type="text" id="username" autocomplete="username" maxlength="40" placeholder="contoh: rina.putri"
+                 spellcheck="false" autocapitalize="none" aria-describedby="username-hint login-error">
+          <button type="submit" id="btn-login"><span id="btn-login-label">Masuk</span>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
+        </div>
+        <p id="username-hint" class="muted small">Huruf, angka, titik, garis bawah. Belum punya? Ketik username baru, akunnya langsung dibuat.</p>
+        <div class="notice" id="login-error" role="alert"></div>
+      </form>
+      <ul class="facts">
+        <li>Tes penempatan 5 soal</li><li>Maks. 10 giliran per sesi</li><li>3 sesi per hari</li>
+      </ul>
     </div>
-    <div class="card login-card">
-    <form id="login-form">
-      <label class="field" for="username">Username</label>
-      <div class="row" style="flex-wrap:nowrap">
-        <input type="text" id="username" autocomplete="username" required maxlength="40"
-               pattern="[A-Za-z0-9_.\-]+" aria-describedby="username-hint">
-        <button type="submit">Masuk</button>
+
+    <!-- Contoh satu giliran + pilihan gaya mentor (disimpan untuk akun baru) -->
+    <div class="login-demo">
+      <div class="demo-window" aria-label="Contoh satu giliran sesi" role="group">
+        <div class="demo-head">
+          <span class="face-mini">
+            <svg class="tface" data-eyes viewBox="0 0 200 170" aria-hidden="true">
+              <path class="head" d="M58 38 C96 30 140 31 162 41 C176 62 178 110 167 137 C130 149 72 150 37 139 C26 112 25 66 39 43 Z"/>
+              <ellipse class="eye" cx="77" cy="84" rx="15" ry="17"/><ellipse class="eye" cx="124" cy="84" rx="15" ry="17"/>
+              <g class="pupils"><circle class="pupil" cx="77" cy="86" r="7"/><circle class="pupil" cx="124" cy="86" r="7"/></g>
+              <path class="stroke only-galak" d="M58 58 l30 12M143 58 l-30 12"/><path class="stroke only-galak" d="M87 120 h27"/>
+              <path class="stroke only-lembut" d="M62 66 l25 -8M139 66 l-25 -8"/><path class="stroke only-lembut" d="M83 122 q8.5 -8 17 0 t17 0"/>
+            </svg>
+          </span>
+          <div><b id="demo-name">Mentor galak</b><small>contoh satu giliran</small></div>
+        </div>
+        <div class="demo-body">
+          <p class="b-tutor">Coba perkenalkan dirimu dalam bahasa Inggris.</p>
+          <p class="b-user">My name is Rina. I am study management.</p>
+          <div class="demo-mark"><p>I <span class="ins"><span class="sr-only">benar: </span><span class="fix">study</span><span class="sr-only">salah: </span><span class="was">am study</span></span> management.</p></div>
+          <p class="b-tutor" id="demo-reply">Tanpa "am". Cukup: I study management. Ulangi.</p>
+        </div>
       </div>
-      <p id="username-hint" class="muted small" style="margin-top:var(--s2)">Huruf, angka, titik, garis bawah. Belum punya? Ketik username baru, akunnya langsung dibuat.</p>
-    </form>
-    <div class="notice" id="login-error" role="alert"></div>
+
+      <fieldset class="mentor-pick">
+        <legend>Pilih gaya mentor. Bisa diganti kapan saja di beranda.</legend>
+        <label class="mentor-card is-galak">
+          <input type="radio" name="mentor-pick" value="galak">
+          <svg class="tface" data-eyes viewBox="0 0 200 170" aria-hidden="true">
+            <path class="head" d="M58 38 C96 30 140 31 162 41 C176 62 178 110 167 137 C130 149 72 150 37 139 C26 112 25 66 39 43 Z"/>
+            <ellipse class="eye" cx="77" cy="84" rx="15" ry="17"/><ellipse class="eye" cx="124" cy="84" rx="15" ry="17"/>
+            <g class="pupils"><circle class="pupil" cx="77" cy="86" r="7"/><circle class="pupil" cx="124" cy="86" r="7"/></g>
+            <path class="stroke" d="M58 58 l30 12M143 58 l-30 12"/><path class="stroke" d="M87 120 h27"/>
+          </svg>
+          <span><b>Galak</b><span class="mc-desc">Tegas dan langsung ke inti.</span></span>
+        </label>
+        <label class="mentor-card is-lembut">
+          <input type="radio" name="mentor-pick" value="lembut">
+          <svg class="tface" data-eyes viewBox="0 0 200 170" aria-hidden="true">
+            <path class="head" d="M58 38 C96 30 140 31 162 41 C176 62 178 110 167 137 C130 149 72 150 37 139 C26 112 25 66 39 43 Z"/>
+            <ellipse class="eye" cx="77" cy="84" rx="15" ry="17"/><ellipse class="eye" cx="124" cy="84" rx="15" ry="17"/>
+            <g class="pupils"><circle class="pupil" cx="77" cy="86" r="7"/><circle class="pupil" cx="124" cy="86" r="7"/></g>
+            <path class="stroke" d="M62 66 l25 -8M139 66 l-25 -8"/><path class="mouth-fill" d="M78 112 q22 22 44 0 z"/>
+          </svg>
+          <span><b>Lembut</b><span class="mc-desc">Sabar, akui usahamu dulu.</span></span>
+        </label>
+      </fieldset>
     </div>
-    <p class="facts">Tes penempatan 5 soal · maks. 10 giliran per sesi · 3 sesi per hari · gratis</p>
   </section>
 
   <!-- ===== Layar 2: Tes penempatan ===== -->
-  <section id="screen-placement" class="panel card hidden" aria-labelledby="h-placement">
-    <h2 id="h-placement">Tes penempatan</h2>
-    <div id="placement-intro">
-      <p>Lima soal pilihan ganda, kira-kira dua menit. Hasilnya menentukan seberapa banyak tutor memakai bahasa Indonesia.</p>
-      <div class="row">
-        <button id="btn-take-test">Mulai tes</button>
-        <button id="btn-skip-test" class="quiet">Saya mulai dari nol</button>
+  <!-- Lembar soal: jawaban yang dipilih "ditulis tangan" ke titik-titik kalimatnya -->
+  <section id="screen-placement" class="panel card banded hidden" aria-labelledby="h-placement">
+    <div class="band">
+      <h2 id="h-placement">Tes penempatan</h2>
+      <p class="band-meta">5 soal · kira-kira 2 menit</p>
+    </div>
+    <div class="band-body">
+      <div id="placement-intro">
+        <p class="intro-text">Hasilnya menentukan seberapa banyak tutor memakai bahasa Indonesia. Baru mulai belajar? Pilih “Saya mulai dari nol”.</p>
+        <div class="row placement-actions">
+          <button id="btn-take-test">Mulai tes</button>
+          <button id="btn-skip-test" class="quiet">Saya mulai dari nol</button>
+        </div>
       </div>
+      <form id="placement-form" class="hidden" novalidate>
+        <div id="questions"></div>
+        <div class="row placement-actions">
+          <button type="submit">Kirim jawaban</button>
+          <span id="placement-count" class="muted small" aria-live="polite"></span>
+        </div>
+      </form>
+      <div id="placement-result" class="hidden">
+        <p id="placement-score" class="result-score"></p>
+        <p id="placement-result-text" class="result-text"></p>
+        <p id="placement-result-note" class="muted"></p>
+        <button id="btn-to-home">Lanjut ke beranda
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
+      </div>
+      <div class="notice" id="placement-error" role="alert"></div>
     </div>
-    <form id="placement-form" class="hidden">
-      <div id="questions"></div>
-      <button type="submit">Kirim jawaban</button>
-    </form>
-    <div id="placement-result" class="hidden">
-      <p id="placement-result-text" style="font: 600 var(--t2)/1.4 var(--f-read)"></p>
-      <button id="btn-to-home">Lanjut</button>
-    </div>
-    <div class="notice" id="placement-error" role="alert"></div>
   </section>
 
   <!-- ===== Layar 3: Beranda ===== -->
-  <section id="screen-home" class="panel card hidden" aria-labelledby="home-greeting">
-    <h2 id="home-greeting"></h2>
-    <p id="home-info" class="stats-line"></p>
-    <fieldset class="persona">
-      <legend>Gaya mentor</legend>
-      <label class="persona-opt">
-        <input type="radio" name="persona" value="galak">
-        <span><span class="po-title">Galak</span>
-        <span class="po-desc">Tegas dan langsung. Di level menengah ke atas, jawabanmu boleh disindir.</span></span>
-      </label>
-      <label class="persona-opt">
-        <input type="radio" name="persona" value="lembut">
-        <span><span class="po-title">Lembut</span>
-        <span class="po-desc">Sabar dan menyemangati. Tetap mengoreksi, tanpa sindiran.</span></span>
-      </label>
-      <p id="persona-status" class="muted small" aria-live="polite"></p>
-    </fieldset>
-    <div class="row">
-      <button id="btn-start">Mulai sesi</button>
-      <button id="btn-logout" class="quiet">Ganti pengguna</button>
+  <!-- Pita atas berwarna aksen mentor (seperti jendela contoh di layar masuk); wajahnya ikut gaya yang dipilih -->
+  <section id="screen-home" class="panel card banded home hidden" aria-labelledby="home-greeting">
+    <div class="band home-head">
+      <span class="face-mini">
+        <svg class="tface" viewBox="0 0 200 170" aria-hidden="true">
+          <path class="head" d="M58 38 C96 30 140 31 162 41 C176 62 178 110 167 137 C130 149 72 150 37 139 C26 112 25 66 39 43 Z"/>
+          <ellipse class="eye" cx="77" cy="84" rx="15" ry="17"/><ellipse class="eye" cx="124" cy="84" rx="15" ry="17"/>
+          <g class="pupils"><circle class="pupil" cx="77" cy="86" r="7"/><circle class="pupil" cx="124" cy="86" r="7"/></g>
+          <path class="stroke only-galak" d="M58 58 l30 12M143 58 l-30 12"/><path class="stroke only-galak" d="M87 120 h27"/>
+          <path class="stroke only-lembut" d="M62 66 l25 -8M139 66 l-25 -8"/><path class="stroke only-lembut" d="M83 122 q8.5 -8 17 0 t17 0"/>
+        </svg>
+      </span>
+      <h2 id="home-greeting"></h2>
+      <dl id="home-info" class="home-stats"></dl>
     </div>
-    <div class="notice" id="home-error" role="alert"></div>
+    <div class="band-body">
+      <fieldset class="mentor-pick">
+        <legend>Gaya mentor untuk sesi berikutnya</legend>
+        <label class="mentor-card is-galak">
+          <input type="radio" name="persona" value="galak">
+          <svg class="tface" viewBox="0 0 200 170" aria-hidden="true">
+            <path class="head" d="M58 38 C96 30 140 31 162 41 C176 62 178 110 167 137 C130 149 72 150 37 139 C26 112 25 66 39 43 Z"/>
+            <ellipse class="eye" cx="77" cy="84" rx="15" ry="17"/><ellipse class="eye" cx="124" cy="84" rx="15" ry="17"/>
+            <g class="pupils"><circle class="pupil" cx="77" cy="86" r="7"/><circle class="pupil" cx="124" cy="86" r="7"/></g>
+            <path class="stroke" d="M58 58 l30 12M143 58 l-30 12"/><path class="stroke" d="M87 120 h27"/>
+          </svg>
+          <span><b>Galak</b><span class="mc-desc">Tegas dan langsung. Di level menengah ke atas, jawabanmu boleh disindir.</span></span>
+        </label>
+        <label class="mentor-card is-lembut">
+          <input type="radio" name="persona" value="lembut">
+          <svg class="tface" viewBox="0 0 200 170" aria-hidden="true">
+            <path class="head" d="M58 38 C96 30 140 31 162 41 C176 62 178 110 167 137 C130 149 72 150 37 139 C26 112 25 66 39 43 Z"/>
+            <ellipse class="eye" cx="77" cy="84" rx="15" ry="17"/><ellipse class="eye" cx="124" cy="84" rx="15" ry="17"/>
+            <g class="pupils"><circle class="pupil" cx="77" cy="86" r="7"/><circle class="pupil" cx="124" cy="86" r="7"/></g>
+            <path class="stroke" d="M62 66 l25 -8M139 66 l-25 -8"/><path class="mouth-fill" d="M78 112 q22 22 44 0 z"/>
+          </svg>
+          <span><b>Lembut</b><span class="mc-desc">Sabar dan menyemangati. Tetap mengoreksi, tanpa sindiran.</span></span>
+        </label>
+        <p id="persona-status" class="muted small" aria-live="polite"></p>
+      </fieldset>
+      <div class="row home-actions">
+        <button id="btn-start"><span>Mulai sesi</span>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
+        <button id="btn-logout" class="quiet">Ganti pengguna</button>
+      </div>
+      <div class="notice" id="home-error" role="alert"></div>
+    </div>
   </section>
 
   <!-- ===== Layar 4: Sesi ===== -->
-  <section id="screen-chat" class="panel hidden" aria-label="Sesi latihan">
-    <div id="chat-info" class="row">
-      <span id="chat-info-text"></span>
-      <span class="row">
-        <button id="btn-tts" class="quiet sm"></button>
-        <button id="btn-mode" class="quiet sm"></button>
-        <button id="btn-end" class="quiet sm">Selesai</button>
-      </span>
+  <section id="screen-chat" class="panel session hidden" aria-labelledby="session-title">
+    <div id="chat-info">
+      <div class="seg" role="group" aria-label="Mode sesi">
+        <button type="button" id="btn-mode-suara" aria-pressed="true"></button>
+        <button type="button" id="btn-mode-chat" aria-pressed="false"></button>
+      </div>
+      <span class="spacer"></span>
+      <button type="button" id="btn-tts" class="quiet icon-btn"></button>
+      <button type="button" id="btn-end" class="quiet">Selesai</button>
     </div>
 
+    <!-- Kepala sesi (dipakai kedua mode): materi dari planner + jejak 10 giliran -->
+    <header class="session-head">
+      <p class="session-tag" id="session-tag"></p>
+      <h2 id="session-title"></h2>
+      <p class="session-focus" id="session-focus"></p>
+      <div id="turns" class="turns" role="img"></div>
+    </header>
+
     <!-- Mode suara -->
-    <div id="stage">
+    <div id="stage" data-activity="idle">
       <div id="face" data-mood="netral" data-activity="idle" aria-hidden="true">
-        <svg viewBox="0 0 200 170">
-          <!-- kepala digambar sedikit tidak simetris, seperti coretan tangan -->
+        <svg class="tface" data-eyes viewBox="0 0 200 170">
+          <!-- bayangan keras + kepala yang sedikit tidak simetris, seperti coretan tangan -->
+          <path class="shadow" d="M66 46 C104 38 148 39 170 49 C184 70 186 118 175 145 C138 157 80 158 45 147 C34 120 33 74 47 51 Z"/>
           <path class="head" d="M58 38 C96 30 140 31 162 41 C176 62 178 110 167 137 C130 149 72 150 37 139 C26 112 25 66 39 43 Z"/>
-          <g class="eyes eyes-open"><circle class="dot" cx="77" cy="84" r="7.5"/><circle class="dot" cx="124" cy="84" r="7.5"/></g>
-          <g class="eyes eyes-happy"><path class="ink" d="M67 88 q10 -13 20 0"/><path class="ink" d="M114 88 q10 -13 20 0"/></g>
-          <g class="brows"><path class="pen" d="M60 64 l27 10"/><path class="pen" d="M141 64 l-27 10"/></g>
+          <g class="ears"><path d="M184 70 q10 20 0 40"/><path d="M194 60 q16 30 0 60"/></g>
+          <g class="eyes eyes-open">
+            <ellipse class="eye" cx="77" cy="84" rx="15" ry="17"/><ellipse class="eye" cx="124" cy="84" rx="15" ry="17"/>
+            <g class="look"><g class="pupils">
+              <circle class="pupil" cx="77" cy="86" r="7"/><circle class="pupil" cx="124" cy="86" r="7"/>
+              <circle class="glint" cx="80" cy="82" r="2.4"/><circle class="glint" cx="127" cy="82" r="2.4"/>
+            </g></g>
+          </g>
+          <g class="eyes eyes-happy"><path d="M64 90 q13 -16 26 0"/><path d="M111 90 q13 -16 26 0"/></g>
+          <g class="brows"><path d="M58 58 l30 12"/><path d="M143 58 l-30 12"/></g>
           <!-- mentor lembut saat mengoreksi: alis naik di tengah (peduli), mulut "hmm" -->
-          <g class="brows-soft"><path class="ink" d="M62 71 l24 -8"/><path class="ink" d="M139 71 l-24 -8"/></g>
-          <path class="mouth mouth-hmm ink" d="M85 121 q7.5 -7 15 0 t15 0"/>
-          <path class="mouth mouth-flat ink" d="M88 118 h25"/>
-          <path class="mouth mouth-smile ink" d="M80 110 q21 20 42 0"/>
-          <ellipse class="mouth mouth-o dot" cx="100" cy="121" rx="8" ry="11"/>
-          <ellipse class="mouth mouth-talk dot" cx="100" cy="118" rx="13" ry="8"/>
+          <g class="brows-soft"><path d="M62 66 l25 -8"/><path d="M139 66 l-25 -8"/></g>
+          <path class="mouth mouth-hmm" d="M83 122 q8.5 -8 17 0 t17 0"/>
+          <path class="mouth mouth-flat" d="M87 120 h27"/>
+          <path class="mouth mouth-smile fillm" d="M78 112 q22 22 44 0 z"/>
+          <ellipse class="mouth mouth-o fillm" cx="100" cy="122" rx="9" ry="12"/>
+          <ellipse class="mouth mouth-talk fillm" cx="100" cy="120" rx="14" ry="10"/>
           <!-- tanda kesal: urat ala komik, ditulis dengan pena merah -->
-          <g class="vein"><path class="pen" d="M160 18 q6 8 0 16"/><path class="pen" d="M176 18 q-6 8 0 16"/>
-                          <path class="pen" d="M156 30 q8 -6 16 0"/><path class="pen" d="M156 22 q8 6 16 0"/></g>
+          <g class="vein"><path d="M160 14 q6 8 0 16"/><path d="M176 14 q-6 8 0 16"/><path d="M156 26 q8 -6 16 0"/><path d="M156 18 q8 6 16 0"/></g>
           <!-- centang hijau saat jawaban benar -->
-          <path class="tick okmark" d="M152 26 l10 10 l20 -22"/>
-          <g class="thinking"><circle class="dot" cx="156" cy="30" r="4"/><circle class="dot" cx="168" cy="20" r="5"/><circle class="dot" cx="182" cy="8" r="6"/></g>
+          <path class="tick" d="M150 22 l10 10 l22 -24"/>
+          <g class="thinking"><circle cx="160" cy="26" r="5"/><circle cx="174" cy="14" r="6.5"/><circle cx="190" cy="0" r="8"/></g>
         </svg>
       </div>
+      <div id="status" class="status" data-activity="idle" role="status">
+        <span class="status-dot" aria-hidden="true"></span><span id="status-text"></span><span id="status-time" aria-hidden="true"></span>
+      </div>
+      <div id="live" class="live" aria-live="polite"></div>
       <div id="stage-user"></div>
-      <div id="stage-marks" class="marks" aria-label="Koreksi"></div>
-      <div id="stage-reply" class="bubble tutor" aria-live="polite"></div>
+      <div id="stage-marks" class="marks-card" aria-label="Koreksi"></div>
+      <div id="stage-ok" class="ok-chip hidden">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Benar, tanpa koreksi
+      </div>
+      <div id="stage-reply" class="reply-card" aria-live="polite"></div>
       <div id="stage-controls">
-        <div id="live" class="live" aria-live="polite"></div>
+        <!-- saat ditahan, tombol "masuk" ke bayangannya -->
         <button id="btn-ptt" aria-label="Tahan untuk bicara"></button>
-        <div class="hint">Tahan tombol<span class="kbd-hint"> atau <kbd>Spasi</kbd></span> sambil bicara. Lepas untuk mengirim.</div>
+        <div class="ptt-text"><b id="ptt-label"></b><span id="ptt-sub" class="hint"></span></div>
         <form id="stage-form" class="row">
           <label class="sr-only" for="stage-input">Atau ketik jawabanmu</label>
-          <input type="text" id="stage-input" placeholder="atau ketik di sini" autocomplete="off">
-          <button type="submit">Kirim</button>
+          <input type="text" id="stage-input" placeholder="atau ketik jawabanmu di sini" autocomplete="off">
+          <button type="submit" class="quiet">Kirim</button>
         </form>
       </div>
     </div>

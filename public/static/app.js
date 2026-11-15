@@ -11,12 +11,15 @@ const ICON = {
   notes: svg('<path d="M6 3.5h9l3.5 3.5v13.5H6z"/><path d="M9 10h6.5M9 13.5h6.5M9 17h3.5"/>'),
   check: svg('<path d="M5 12.5l4.5 4.5L19 7"/>'),
   warn: svg('<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.3"/>'),
+  wave: svg('<path d="M6 15c2-4 4-4 6 0s4 4 6 0"/>'),
+  pen: svg('<path d="M4 20l4-1 11-11-3-3L5 16z"/>'),
+  stop: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/></svg>',
 };
 
 // =====================================================================
 // State aplikasi: apa yang perlu diingat browser selama halaman terbuka
 // =====================================================================
-const state = { user: null, sessionId: null, sessionOpen: false, busy: false, screen: "login", header: "", lastUserBubble: null };
+const state = { user: null, sessionId: null, sessionOpen: false, busy: false, screen: "login", lastUserBubble: null, turnResults: [], busyLabel: "" };
 const $ = (id) => document.getElementById(id);
 
 function load(key, fallback) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } }
@@ -61,16 +64,22 @@ function refreshLayout() {
   const composer = inChat && !voice && state.sessionOpen;
   $("composer").classList.toggle("hidden", !composer);
   document.body.classList.toggle("composer-open", composer);
-  $("btn-mode").innerHTML = voice ? `${ICON.chat}<span>Mode chat</span>` : `${ICON.face}<span>Mode suara</span>`;
+  $("btn-mode-suara").setAttribute("aria-pressed", String(voice));
+  $("btn-mode-chat").setAttribute("aria-pressed", String(!voice));
   $("btn-end").disabled = !state.sessionOpen || state.busy;
 }
 
-$("btn-mode").addEventListener("click", () => {
-  state.mode = state.mode === "suara" ? "chat" : "suara";
-  save("mode", state.mode);
-  refreshLayout();
-  $("messages").lastElementChild?.scrollIntoView({ block: "end" });
-});
+$("btn-mode-suara").innerHTML = `${ICON.mic}<span>Suara</span>`;
+$("btn-mode-chat").innerHTML = `${ICON.chat}<span>Chat</span>`;
+for (const mode of ["suara", "chat"]) {
+  $(`btn-mode-${mode}`).addEventListener("click", () => {
+    if (state.mode === mode) return;
+    state.mode = mode;
+    save("mode", state.mode);
+    refreshLayout();
+    $("messages").lastElementChild?.scrollIntoView({ block: "end" });
+  });
+}
 
 // =====================================================================
 // Markdown mini untuk balasan tutor (**tebal**, *miring*, daftar, kutipan).
@@ -112,21 +121,123 @@ function markdown(src) {
 }
 
 // =====================================================================
+// Gaya mentor = warna aksen seluruh halaman (galak kuning, lembut biru)
+// =====================================================================
+const DEMO_REPLY = {
+  galak: 'Tanpa "am". Cukup: I study management. Ulangi.',
+  lembut: 'Hampir! Cukup "I study management", tanpa "am". Coba lagi, ya.',
+};
+
+function setMentor(persona) {
+  const m = persona === "lembut" ? "lembut" : "galak";
+  document.documentElement.dataset.mentor = m;
+  $("demo-name").textContent = `Mentor ${m}`;
+  $("demo-reply").textContent = DEMO_REPLY[m];
+  const pick = document.querySelector(`input[name=mentor-pick][value=${m}]`);
+  if (pick) pick.checked = true;
+}
+
+// Di layar masuk, pilihan ini baru pratinjau; disimpan ke akun hanya jika akun belum punya gaya mentor
+for (const radio of document.querySelectorAll("input[name=mentor-pick]")) {
+  radio.addEventListener("change", () => { save("mentor", radio.value); setMentor(radio.value); });
+}
+
+// =====================================================================
 // Layar 1: Masuk
 // =====================================================================
+const USERNAME_RE = /^[A-Za-z0-9_.\-]+$/;   // sama dengan aturan di server
+const USERNAME_BAD = "Username hanya boleh huruf, angka, titik, garis bawah, atau tanda minus. Spasi belum bisa.";
+
 async function login(username) {
   state.user = await api("/api/login", { username });
+  if (!state.user.persona_default) {   // akun baru: pakai gaya mentor yang dipilih di layar masuk
+    try {
+      const r = await api("/api/persona", { user_id: state.user.id, persona: load("mentor", "galak") });
+      state.user.persona_default = r.persona;
+    } catch { /* tetap bisa dipilih di beranda */ }
+  }
+  setMentor(state.user.persona_default);
   save("username", state.user.username);
   $("who").textContent = state.user.username;
   if (state.user.sudah_tes) await showHome(); else showPlacement();
 }
 
+function setLoginBusy(busy) {
+  $("btn-login").disabled = busy;
+  $("username").readOnly = busy;
+  $("btn-login-label").textContent = busy ? "Masuk…" : "Masuk";
+}
+
+function loginError(text) {
+  notice("login-error", text);
+  $("username").setAttribute("aria-invalid", String(Boolean(text)));
+}
+
+// Validasi selagi mengetik: peringatan muncul begitu ada karakter yang tidak boleh, hilang begitu diperbaiki
+$("username").addEventListener("input", () => {
+  const v = $("username").value;
+  loginError(v && !USERNAME_RE.test(v) ? USERNAME_BAD : "");
+  updateReading();
+});
+
 $("login-form").addEventListener("submit", async (e) => {
   e.preventDefault();  // cegah form memuat ulang halaman
-  notice("login-error", "");
-  try { await login($("username").value.trim()); }
-  catch (err) { notice("login-error", err.message); }
+  const v = $("username").value.trim();
+  if (!v) { loginError("Isi username dulu, misalnya rina.putri."); $("username").focus(); return; }
+  if (!USERNAME_RE.test(v)) { loginError(USERNAME_BAD); $("username").focus(); return; }
+  loginError("");
+  setLoginBusy(true);
+  try { await login(v); }
+  catch (err) { loginError(err.message); }
+  finally { setLoginBusy(false); }
 });
+
+// ---- Wajah tutor (layar masuk & mode suara): mata mengikuti kursor, berkedip, dan "membaca" saat kamu mengetik ----
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+const loginFaces = () => document.querySelectorAll("#screen-login [data-eyes]");
+const liveFaces = () => state.screen === "login" ? loginFaces()
+  : state.screen === "chat" && state.mode === "suara" ? document.querySelectorAll("#face [data-eyes]") : [];
+const isReading = () => document.activeElement === $("username") && $("username").value.length > 0;
+
+function aimEyes(x, y) {
+  for (const face of liveFaces()) {
+    const r = face.getBoundingClientRect();
+    if (!r.width) continue;
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const angle = Math.atan2(y - cy, x - cx);
+    const reach = Math.min(1, Math.hypot(x - cx, y - cy) / 300);   // makin jauh kursor, makin lebar liriknya
+    face.querySelector(".pupils").style.transform =
+      `translate(${(Math.cos(angle) * 6 * reach).toFixed(1)}px, ${(Math.sin(angle) * 5 * reach).toFixed(1)}px)`;
+  }
+}
+
+function updateReading() {
+  const reading = isReading();
+  $("screen-login").classList.toggle("reading", reading);
+  if (!reading || reduceMotion.matches) return;
+  const input = $("username"), r = input.getBoundingClientRect();
+  aimEyes(r.left + r.width * Math.min(1, input.value.length / 24), r.top);   // mata menyusuri teks yang diketik
+}
+$("username").addEventListener("focus", updateReading);
+$("username").addEventListener("blur", updateReading);
+
+let eyeFrame = 0;
+document.addEventListener("pointermove", (e) => {
+  if (reduceMotion.matches || (state.screen === "login" && isReading())) return;
+  cancelAnimationFrame(eyeFrame);
+  eyeFrame = requestAnimationFrame(() => aimEyes(e.clientX, e.clientY));
+});
+
+(function blinkLoop() {
+  setTimeout(() => {
+    if (!reduceMotion.matches && !document.hidden) {
+      const faces = liveFaces();
+      faces.forEach((f) => f.classList.add("blink"));
+      setTimeout(() => faces.forEach((f) => f.classList.remove("blink")), 130);
+    }
+    blinkLoop();
+  }, 2200 + Math.random() * 3200);
+})();
 
 // =====================================================================
 // Layar 2: Tes penempatan
@@ -142,37 +253,72 @@ function showPlacement() {
 $("btn-take-test").addEventListener("click", async () => {
   try {
     const questions = await api("/api/placement/questions");
+    // "___" di soal jadi titik-titik; jawaban yang dipilih tampil di situ dengan tulisan tangan
+    const blank = '<span class="blank"><span class="sr-only">titik-titik</span><span class="fill" aria-hidden="true"></span></span>';
     $("questions").innerHTML = questions.map((q) => `
       <fieldset class="question">
-        <legend>${q.no}. ${escapeHtml(q.soal)}</legend>
-        <div class="opts">${Object.entries(q.opsi).map(([letter, text]) => `
-          <label><input type="radio" name="q${q.no}" value="${letter}" required>
+        <legend><span class="q-no">${q.no}</span><span>${escapeHtml(q.soal).replace("___", blank)}</span></legend>
+        <div class="opts${Object.values(q.opsi).some((t) => t.length > 12) ? " long" : ""}">${Object.entries(q.opsi).map(([letter, text]) => `
+          <label class="opt"><input type="radio" name="q${q.no}" value="${letter}" data-text="${escapeHtml(text)}">
                  <span class="letter">${letter}</span><span>${escapeHtml(text)}</span></label>
         `).join("")}</div>
       </fieldset>`).join("");
+    placementTotal = questions.length;
+    updatePlacementCount();
     $("placement-intro").classList.add("hidden");
     $("placement-form").classList.remove("hidden");
     $("questions").querySelector("input")?.focus();
   } catch (err) { notice("placement-error", err.message); }
 });
 
+let placementTotal = 5;
+const unanswered = () => [...$("questions").querySelectorAll(".question")]
+  .filter((f) => !f.querySelector("input:checked"));
+function updatePlacementCount() {
+  $("placement-count").textContent = `${placementTotal - unanswered().length} dari ${placementTotal} dijawab`;
+}
+
+$("questions").addEventListener("change", (e) => {
+  const fs = e.target.closest(".question");
+  fs.querySelector(".fill").textContent = e.target.dataset.text;
+  fs.classList.remove("missing");
+  if (!unanswered().length) notice("placement-error", "");
+  updatePlacementCount();
+});
+
 $("placement-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const answers = [1, 2, 3, 4, 5].map((n) => document.querySelector(`input[name=q${n}]:checked`)?.value);
-  if (answers.includes(undefined)) { notice("placement-error", "Masih ada soal yang belum dijawab."); return; }
+  const missing = unanswered();
+  if (missing.length) {
+    const nos = missing.map((f) => f.querySelector(".q-no").textContent);
+    missing.forEach((f) => f.classList.add("missing"));
+    notice("placement-error", `Soal ${nos.join(", ")} belum dijawab.`);
+    missing[0].querySelector("input").focus();
+    return;
+  }
+  const answers = [...$("questions").querySelectorAll(".question input:checked")].map((i) => i.value);
   await submitPlacement(answers);
 });
 
 $("btn-skip-test").addEventListener("click", () => submitPlacement(null));
+
+// Bahasa penjelasan tutor per level (sesuai aturan level di agent.py)
+const LEVEL_NOTE = {
+  pemula: "Tutor menjelaskan dalam bahasa Indonesia dan mulai dari kalimat dasar.",
+  menengah: "Tutor menjelaskan dengan campuran bahasa Indonesia dan Inggris.",
+  lanjut: "Tutor menjelaskan sepenuhnya dalam bahasa Inggris.",
+};
 
 async function submitPlacement(answers) {
   notice("placement-error", "");
   try {
     const r = await api("/api/placement", { user_id: state.user.id, answers });
     state.user.level = r.level; state.user.sudah_tes = true;
-    $("placement-result-text").textContent = r.skor === null
-      ? "Oke, kita mulai dari level pemula."
-      : `Skor kamu ${r.skor}/5. Kamu masuk level ${r.level}.`;
+    const level = `<mark>${escapeHtml(r.level)}</mark>`;
+    $("placement-score").innerHTML = r.skor === null ? "" : `<small>Skor</small>${r.skor}/${placementTotal}`;
+    $("placement-result-text").innerHTML = r.skor === null
+      ? `Oke, kita mulai dari level ${level}.` : `Kamu masuk level ${level}.`;
+    $("placement-result-note").textContent = LEVEL_NOTE[r.level] || "";
     $("placement-intro").classList.add("hidden");
     $("placement-form").classList.add("hidden");
     $("placement-result").classList.remove("hidden");
@@ -192,9 +338,13 @@ async function showHome() {
   const boxes = Array.from({ length: u.batas_sesi }, (_, i) =>
     i < u.sesi_hari_ini ? `<span class="used">${ICON.check}</span>` : "<span></span>").join("");
   $("home-greeting").textContent = `Halo, ${u.username}.`;
-  $("home-info").innerHTML = `Level <strong>${escapeHtml(u.level)}</strong> · Sesi hari ini
-    <span class="quota" role="img" aria-label="${u.sesi_hari_ini} dari ${u.batas_sesi} sesi terpakai">${boxes}</span>`;
+  // kotak jatah hanya hiasan; angkanya tetap ditulis supaya tidak bergantung pada bentuk/warna
+  $("home-info").innerHTML = `
+    <div><dt>Level</dt><dd class="lvl">${escapeHtml(u.level)}</dd></div>
+    <div><dt>Sesi hari ini</dt><dd><span class="quota" aria-hidden="true">${boxes}</span>
+      <span>${u.sesi_hari_ini} dari ${u.batas_sesi}</span></dd></div>`;
   state.persona = u.persona_default || "galak";
+  setMentor(state.persona);
   document.querySelector(`input[name=persona][value=${state.persona}]`).checked = true;
   $("persona-status").textContent = "";
   $("btn-start").disabled = full;
@@ -208,13 +358,15 @@ for (const radio of document.querySelectorAll("input[name=persona]")) {
     try {
       const r = await api("/api/persona", { user_id: state.user.id, persona: radio.value });
       state.persona = state.user.persona_default = r.persona;
+      setMentor(r.persona);
       $("persona-status").textContent = `Tersimpan. Sesi berikutnya pakai gaya ${r.persona}.`;
     } catch (err) { $("persona-status").textContent = err.message; }
   });
 }
 
 $("btn-logout").addEventListener("click", () => {
-  state.user = null; save("username", null); $("username").value = ""; $("who").textContent = ""; show("login");
+  state.user = null; save("username", null); $("username").value = ""; $("who").textContent = "";
+  loginError(""); setMentor(load("mentor", "galak")); show("login");
 });
 
 // =====================================================================
@@ -222,11 +374,40 @@ $("btn-logout").addEventListener("click", () => {
 // activity = apa yang sedang terjadi sekarang (mendengar / berpikir / berbicara)
 // =====================================================================
 function setMood(mood) { $("face").dataset.mood = mood || "netral"; }
-function setActivity(activity) { $("face").dataset.activity = activity; }
 
-// kind: "" biasa · "rec" sedang merekam (titik merah) · "warn" peringatan
+// Pil status + teks di bawah tombol bicara mengikuti activity
+const PTT_TEXT = {
+  idle: ["Tahan untuk bicara", '<span class="kbd-hint">atau tahan <kbd>Spasi</kbd> · </span>lepas untuk mengirim'],
+  listening: ["Lepas untuk mengirim", "bicara dalam bahasa Inggris"],
+  thinking: ["Tunggu sebentar…", "tombol aktif lagi setelah tutor menjawab"],
+  speaking: ["Tahan untuk menyela", "suara tutor berhenti saat kamu bicara"],
+};
+let recTimer = 0;
+function setActivity(activity) {
+  for (const id of ["face", "stage", "status"]) $(id).dataset.activity = activity;
+  clearInterval(recTimer);
+  $("status-time").textContent = "";
+  let text;
+  if (activity === "listening") {
+    text = "Mendengarkan";
+    const t0 = Date.now();
+    const tick = () => { const s = Math.floor((Date.now() - t0) / 1000); $("status-time").textContent = ` · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+    tick(); recTimer = setInterval(tick, 1000);
+  } else if (activity === "thinking") text = state.busyLabel;
+  else if (activity === "speaking") text = "Tutor sedang bicara";
+  else if (!state.sessionOpen) text = "Sesi selesai";
+  else text = Recognition ? "Giliranmu. Tahan tombol lalu bicara." : "Giliranmu. Ketik jawabanmu di bawah.";
+  $("status-text").textContent = text;
+  const [label, sub] = PTT_TEXT[activity] || PTT_TEXT.idle;
+  $("ptt-label").textContent = label;
+  $("ptt-sub").innerHTML = sub;
+}
+
+// kind: "" biasa · "rec" sedang merekam · "warn" peringatan.
+// Di mode suara status rekaman sudah tampil di pil, jadi #live hanya berisi transkrip; composer chat tetap diberi teks.
 function liveText(text, kind = "") {
-  for (const id of ["live", "live2"]) { $(id).textContent = text; $(id).className = `live ${kind}`; }
+  $("live").textContent = text; $("live").className = `live ${kind}`;
+  $("live2").textContent = text || (kind === "rec" ? "Mendengarkan..." : ""); $("live2").className = `live ${kind}`;
 }
 
 // =====================================================================
@@ -287,6 +468,80 @@ let speakToken = 0;   // naik setiap kali ucapan dibatalkan/diganti, agar timer 
 function stopSpeaking() {
   speakToken++;
   if (canSpeak && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
+  ttsAbort?.abort(); ttsAbort = null;
+  for (const src of ttsSources) { try { src.stop(); } catch { /* sudah berhenti */ } }
+  ttsSources = [];
+}
+
+// =====================================================================
+// Suara Gemini (server /api/tts): intonasi ikut mood & gaya mentor.
+// Server mengalirkan PCM 16-bit mono 24 kHz; tiap potongan langsung dijadwalkan di Web Audio,
+// jadi tutor mulai bicara sebelum seluruh audio selesai dibuat. Gagal -> suara browser (di bawah).
+// =====================================================================
+const TTS_RATE = 24000;
+let serverTts = true;          // jadi false bila server menjawab 503 (GEMINI_API_KEY belum diisi)
+let audioCtx = null, ttsAbort = null, ttsSources = [];
+const ttsCache = new Map();    // gaya|mood|teks -> potongan audio; "Putar ulang" tidak memanggil server lagi
+
+// Browser hanya mengizinkan audio setelah pengguna berinteraksi: siapkan AudioContext di klik/tombol pertama
+for (const ev of ["pointerdown", "keydown"]) {
+  document.addEventListener(ev, () => {
+    audioCtx ??= new AudioContext();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  });
+}
+
+async function speakServer(text, hooks, token) {
+  audioCtx ??= new AudioContext();
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+  const key = `${hooks.persona}|${hooks.mood}|${text}`;
+  let at = 0, started = false, pending = 0, done = false;
+
+  const play = (samples) => {
+    const buffer = audioCtx.createBuffer(1, samples.length, TTS_RATE);
+    buffer.copyToChannel(samples, 0);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(audioCtx.destination);
+    at = Math.max(at, audioCtx.currentTime + 0.03);   // potongan berikutnya menyambung tepat di ujung yang sebelumnya
+    src.start(at);
+    at += buffer.duration;
+    ttsSources.push(src); pending++;
+    if (!started) { started = true; hooks.onStart?.(); }
+    src.onended = () => { pending--; if (done && pending === 0 && token === speakToken) hooks.onEnd?.(); };
+  };
+
+  const cached = ttsCache.get(key);
+  if (cached) { done = true; cached.forEach(play); return; }
+
+  ttsAbort = new AbortController();
+  const res = await fetch("/api/tts", {
+    method: "POST", headers: { "Content-Type": "application/json" }, signal: ttsAbort.signal,
+    body: JSON.stringify({ text, mood: hooks.mood || "netral", persona: hooks.persona || "galak",
+                           user_id: state.user?.id, session_id: state.sessionId }),
+  });
+  if (!res.ok) throw Object.assign(new Error(`TTS server ${res.status}`), { status: res.status });
+
+  const reader = res.body.getReader(), parts = [];
+  let rest = new Uint8Array(0);              // byte ganjil yang terpotong di batas potongan jaringan
+  for (;;) {
+    const { value, done: end } = await reader.read();
+    if (end) break;
+    if (token !== speakToken) return;        // dibatalkan (pengguna menyela / pesan baru)
+    let bytes = value;
+    if (rest.length) { bytes = new Uint8Array(rest.length + value.length); bytes.set(rest); bytes.set(value, rest.length); }
+    const even = bytes.length - (bytes.length % 2);
+    rest = bytes.slice(even);
+    if (!even) continue;
+    const pcm = new Int16Array(bytes.slice(0, even).buffer);
+    const samples = Float32Array.from(pcm, (v) => v / 32768);
+    parts.push(samples);
+    play(samples);
+  }
+  done = true;
+  if (!started) throw new Error("TTS server tidak mengirim audio");
+  if (pending === 0 && token === speakToken) hooks.onEnd?.();
+  ttsCache.set(key, parts);
 }
 
 // Dibacakan per kalimat: bahasa bisa berganti, dan Chrome kadang memotong ucapan yang terlalu panjang.
@@ -317,8 +572,8 @@ function speakSentences(sentences, token, useChosenVoice, hooks) {
 }
 
 // hooks.onStart: dipanggil saat suara benar-benar mulai (untuk info kecepatan)
+// Urutan: suara Gemini dari server; bila gagal (tanpa key, jaringan, kuota) -> suara browser.
 function speak(text, hooks = {}) {
-  if (!canSpeak) return;
   stopSpeaking();
   const token = speakToken;
   const sentences = toSentences(text);
@@ -328,7 +583,25 @@ function speak(text, hooks = {}) {
     onStart: () => { setActivity("speaking"); hooks.onStart?.(); },
     onEnd: () => setActivity("idle"),
   };
+  // Kuota gratis Gemini hanya 10 suara/hari: dipakai untuk giliran yang emosinya penting
+  // (menegur, mengoreksi, memuji). Pembuka, balasan netral, dan rekap memakai suara browser.
+  const emosional = ["marah", "koreksi", "senang"].includes(hooks.mood);
+  if (!serverTts || !emosional) { speakBrowser(sentences, wrapped, token); return; }
+  speakServer(sentences.join(" "), wrapped, token).catch((err) => {
+    if (err.name === "AbortError" || token !== speakToken) return;   // dibatalkan sengaja
+    if (err.status === 503) serverTts = false;                        // server tanpa key: jangan coba lagi
+    if (err.status === 429) {                                         // kuota Gemini habis: jangan coba lagi sampai halaman dimuat ulang
+      serverTts = false;
+      liveText("Kuota suara Gemini hari ini habis. Sementara tutor memakai suara browser.", "warn");
+    }
+    console.warn("Suara Gemini gagal, pakai suara browser:", err.message);
+    speakBrowser(sentences, wrapped, token);
+  });
+}
 
+// Cadangan: suara bawaan browser (Web Speech API), datar tetapi tanpa biaya dan tanpa server
+function speakBrowser(sentences, wrapped, token) {
+  if (!canSpeak) { setActivity("idle"); return; }
   // Jeda singkat setelah cancel(): Chrome/Edge kadang membuang ucapan yang langsung dikirim setelahnya
   setTimeout(() => {
     if (token !== speakToken) return;
@@ -350,7 +623,8 @@ function speak(text, hooks = {}) {
 }
 
 function renderTtsButton() {
-  $("btn-tts").innerHTML = ttsOn ? `${ICON.speakerOn}<span>Suara</span>` : `${ICON.speakerOff}<span>Bisu</span>`;
+  $("btn-tts").innerHTML = ttsOn ? ICON.speakerOn : ICON.speakerOff;
+  $("btn-tts").setAttribute("aria-label", "Suara tutor");
   $("btn-tts").setAttribute("aria-pressed", String(ttsOn));
   $("btn-tts").title = ttsOn ? "Suara tutor menyala. Tekan untuk membisukan." : "Suara tutor mati. Tekan untuk menyalakan.";
 }
@@ -437,7 +711,7 @@ function pttDown() {
   stopSpeaking();                    // jangan sampai suara tutor ikut terekam
   heardText = ""; sendOnEnd = false; micError = false;
   wantListening = true; pressedAt = performance.now();
-  setPttUi(true); setActivity("listening"); liveText("Mendengarkan...", "rec");
+  setPttUi(true); setMood("netral"); setActivity("listening"); liveText("", "rec");
   try { recognizer.start(); } catch { /* sudah dalam proses menyala */ }
 }
 
@@ -522,14 +796,24 @@ function replayButton(text, mood = "netral") {
   return b;
 }
 
+// Kartu balasan mode suara: "Hentikan suara" selagi tutor bicara, "Putar ulang" sesudahnya (diatur CSS lewat data-activity)
 function showStageReply(text, mood = "netral") {
   $("stage-reply").innerHTML = markdown(text);
-  if (canSpeak) $("stage-reply").appendChild(replayButton(text, mood));
+  if (canSpeak) {
+    const row = document.createElement("div");
+    row.className = "reply-actions";
+    const stop = document.createElement("button");
+    stop.className = "stop";
+    stop.innerHTML = `${ICON.stop}<span>Hentikan suara</span>`;
+    stop.addEventListener("click", () => { stopSpeaking(); setActivity("idle"); });
+    row.append(stop, replayButton(text, mood));
+    $("stage-reply").appendChild(row);
+  }
   $("stage-reply").scrollTop = 0;
 }
 
-// Coretan pena merah: kalimat asli dicoret, perbaikannya ditulis tangan. Data langsung dari tool save_mistake.
-// Agen kadang menyimpan 2 kesalahan dengan kalimat yang persis sama; tampilkan sekali saja.
+// Coretan pena merah: hanya bagian yang salah dicoret, perbaikannya ditulis tangan di atasnya.
+// Data langsung dari tool save_mistake. Agen kadang menyimpan 2 kesalahan dengan kalimat yang persis sama; tampilkan sekali saja.
 function uniqueMarks(list) {
   const seen = new Set();
   return list.filter((k) => {
@@ -538,18 +822,38 @@ function uniqueMarks(list) {
   });
 }
 
+// Cari bagian yang berbeda: buang kata yang sama di awal dan di akhir kedua kalimat
+function splitFix(wrong, right) {
+  const a = wrong.trim().split(/\s+/), b = right.trim().split(/\s+/);
+  let p = 0;
+  while (p < a.length && p < b.length && a[p] === b[p]) p++;
+  let s = 0;
+  while (s < a.length - p && s < b.length - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
+  return { pre: a.slice(0, p).join(" "), was: a.slice(p, a.length - s).join(" "),
+           fix: b.slice(p, b.length - s).join(" "), post: a.slice(a.length - s).join(" "), same: p + s };
+}
+
 function marksHtml(list) {
-  return uniqueMarks(list).map((k) => `
-    <div class="mark">
-      <span class="sr-only">Salah:</span><span class="was">${escapeHtml(k.kalimat_asli)}</span>
-      <span class="sr-only">Benar:</span><span class="fix">${escapeHtml(k.kalimat_benar)}</span>
+  return uniqueMarks(list).map((k) => {
+    const d = splitFix(k.kalimat_asli, k.kalimat_benar);
+    // bagian berbeda terlalu panjang (kalimatnya ditulis ulang): coret seluruhnya, perbaikan di bawahnya
+    const line = d.same === 0 || d.was.split(" ").length > 6
+      ? `<p class="fixline whole"><span class="was">${escapeHtml(k.kalimat_asli)}</span><span class="fix">${escapeHtml(k.kalimat_benar)}</span></p>`
+      : `<p class="fixline">${escapeHtml(d.pre)} <span class="ins"><span class="fix">${escapeHtml(d.fix)}</span>${d.was
+          ? `<span class="was">${escapeHtml(d.was)}</span>` : '<span class="caret">‸</span>'}</span> ${escapeHtml(d.post)}</p>`;
+    return `
+    <div class="fixmark">
+      <span class="sr-only">Salah: ${escapeHtml(k.kalimat_asli)}. Benar: ${escapeHtml(k.kalimat_benar)}.</span>
+      <div aria-hidden="true">${line}</div>
       <span class="why">${escapeHtml(k.pola)} · ${escapeHtml(k.kategori.replace("_", " "))}</span>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 }
 
 function showMarks(list) {
-  $("stage-marks").innerHTML = list?.length ? marksHtml(list) : "";
-  if (list?.length && state.lastUserBubble) {
+  const n = list?.length ? uniqueMarks(list).length : 0;
+  $("stage-marks").innerHTML = n ? `<div class="marks-head">${ICON.pen}${n} koreksi</div>${marksHtml(list)}` : "";
+  if (n && state.lastUserBubble) {
     const box = document.createElement("div");
     box.className = "marks";
     box.setAttribute("aria-label", "Koreksi");
@@ -564,8 +868,11 @@ function setBusy(busy, label = "Tutor sedang membaca jawabanmu...") {
   if (!Recognition) for (const id of ["btn-ptt", "btn-ptt2"]) $(id).disabled = true;
   $("typing")?.remove();
   if (busy) {
-    setActivity("thinking");
-    liveText(label);
+    state.busyLabel = label;
+    setMood("netral");            // ekspresi giliran lalu tidak dibawa ke giliran berikutnya
+    setActivity("thinking");      // label tampil di pil status mode suara
+    liveText("");
+    $("live2").textContent = label;
     const t = document.createElement("div");
     t.id = "typing"; t.className = "typing"; t.textContent = label;
     $("messages").appendChild(t);
@@ -575,13 +882,39 @@ function setBusy(busy, label = "Tutor sedang membaca jawabanmu...") {
   refreshLayout();
 }
 
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// Kepala sesi: materi dari planner (kata terakhir disorot) + jejak giliran
 function updateInfo(r) {
   if (r.topik !== undefined) {
-    const materi = r.topik ? `Topik: ${r.topik}` : `Skenario: ${r.skenario}`;
     state.persona = r.persona || "galak";
-    state.header = `${materi} · Fokus: ${r.fokus_pola.join(", ")} · Gaya: ${state.persona}`;
+    setMentor(state.persona);
+    const words = cap(r.topik || r.skenario || "Sesi latihan").split(" ");
+    const last = words.pop();
+    $("session-title").innerHTML = `${escapeHtml(words.join(" "))} <mark>${escapeHtml(last)}</mark>`;
+    $("session-tag").textContent = `${cap(r.level || state.user.level)} · Mentor ${state.persona}`;
+    $("session-focus").textContent = r.fokus_pola?.length ? `Fokus hari ini: ${r.fokus_pola.join(" · ")}` : "";
   }
-  $("chat-info-text").textContent = `${state.header} · Giliran ${r.turn}/${r.max_turns}`;
+  renderTurns(r.turn, r.max_turns);
+}
+
+// 10 bulatan: sudah lewat = gelombang merah (ada koreksi) / centang hijau (benar), sekarang = warna aksen
+function renderTurns(turn, max) {
+  const salah = [], benar = [];
+  let html = "";
+  for (let i = 1; i <= max; i++) {
+    const res = state.turnResults[i - 1];
+    if (i <= turn && res === "salah") { salah.push(i); html += `<span class="t salah">${ICON.wave}</span>`; }
+    else if (i <= turn && res === "benar") { benar.push(i); html += `<span class="t benar">${ICON.check}</span>`; }
+    else if (i <= turn) html += `<span class="t done">${i}</span>`;
+    else if (i === turn + 1 && state.sessionOpen) html += `<span class="t now">${i}</span>`;
+    else html += `<span class="t">${i}</span>`;
+  }
+  $("turns").innerHTML = html;
+  const label = [state.sessionOpen && turn < max ? `Giliran ${turn + 1} dari ${max}.` : `${turn} dari ${max} giliran terpakai.`];
+  if (salah.length) label.push(`Ada koreksi di giliran ${salah.join(", ")}.`);
+  if (benar.length) label.push(`Benar di giliran ${benar.join(", ")}.`);
+  $("turns").setAttribute("aria-label", label.join(" "));
 }
 
 // ---- Info kecepatan: dengar (STT) · agen (server: LLM + tool) · suara (TTS mulai berbunyi) ----
@@ -618,10 +951,13 @@ async function loadMemory() {
 }
 
 // ---- Satu pintu untuk semua balasan dari server ----
-function handleReply(r, listenMs) {
+function handleReply(r, listenMs, userTurn = false) {
+  if (userTurn) state.turnResults[r.turn - 1] =
+    r.mood === "senang" ? "benar" : r.mood === "marah" || r.mood === "koreksi" ? "salah" : null;
   updateInfo(r);
   setMood(r.mood);
   showMarks(r.koreksi);
+  $("stage-ok").classList.toggle("hidden", !(userTurn && r.mood === "senang"));
   if (r.reply) { addBubble("tutor", r.reply, true, r.mood); showStageReply(r.reply, r.mood); }
   renderStats(listenMs, r.stats, null);
   setActivity("idle");   // selesai berpikir; berubah jadi "speaking" saat suara benar-benar mulai
@@ -633,12 +969,12 @@ function handleReply(r, listenMs) {
   if (r.selesai) showRecap(r);
 }
 
-async function post(path, body, listenMs) {
+async function post(path, body, listenMs, userTurn = false) {
   setBusy(true);
   try {
     const r = await api(path, body);
     setBusy(false);
-    handleReply(r, listenMs);
+    handleReply(r, listenMs, userTurn);
   } catch (err) {
     setBusy(false);
     setActivity("idle"); setMood("netral");
@@ -654,7 +990,8 @@ function sendText(text, listenMs = null) {
   state.lastUserBubble = addBubble("user", text);
   $("stage-user").textContent = `“${text}”`;
   $("stage-marks").innerHTML = "";
-  post(`/api/sessions/${state.sessionId}/messages`, { user_id: state.user.id, text }, listenMs);
+  $("stage-ok").classList.add("hidden");
+  post(`/api/sessions/${state.sessionId}/messages`, { user_id: state.user.id, text }, listenMs, true);
 }
 
 $("btn-send").addEventListener("click", () => { sendText($("input").value); $("input").value = ""; });
@@ -672,8 +1009,11 @@ $("btn-end").addEventListener("click", () => {
 
 $("btn-start").addEventListener("click", async () => {
   notice("home-error", "");
-  for (const id of ["messages", "recap", "stage-user", "stage-marks", "stage-reply", "stats", "chat-info-text"]) $(id).innerHTML = "";
+  for (const id of ["messages", "recap", "stage-user", "stage-marks", "stage-reply", "stats",
+                    "session-tag", "session-title", "session-focus", "turns"]) $(id).innerHTML = "";
+  $("stage-ok").classList.add("hidden");
   state.lastUserBubble = null;
+  state.turnResults = [];
   setMood("netral");
   state.sessionOpen = true;
   show("chat");
@@ -695,6 +1035,8 @@ function showRecap(r) {
   state.sessionOpen = false;
   cancelPtt();
   refreshLayout();
+  renderTurns(r.turn, r.max_turns);
+  if ($("face").dataset.activity !== "speaking") setActivity("idle");   // status jadi "Sesi selesai"
   const rows = (r.progres || []).map((p) => `
     <tr><td>${escapeHtml(p.pola)}</td><td>${p.jumlah_salah}×</td>
         <td>${p.sudah_dikuasai ? `<span class="chip ok" style="margin:0">${ICON.check}dikuasai</span>` : `streak ${p.streak_benar}/3`}</td></tr>`).join("");
@@ -716,8 +1058,10 @@ function showRecap(r) {
 // Saat halaman dibuka: masuk otomatis jika username pernah disimpan
 // =====================================================================
 $("memory").querySelector("summary").innerHTML = `${ICON.notes}<span>Catatan tutor tentang kamu</span>`;
+setMentor(load("mentor", "galak"));
 setupMic();
 renderTtsButton();
 refreshLayout();
+setActivity("idle");
 const saved = load("username", null);
 if (saved) login(saved).catch(() => show("login")); else show("login");
